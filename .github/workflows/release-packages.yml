@@ -1,0 +1,141 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package (example: 1.2.3). Defaults to tag or git-derived value"
+        required: false
+        type: string
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=""
+          fi
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Debian packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            debhelper \
+            dpkg-dev \
+            fakeroot \
+            libsystemd-dev \
+            pkg-config
+
+      - name: Build Debian package
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            ./packaging/build-deb.sh "${{ steps.version.outputs.value }}"
+          else
+            ./packaging/build-deb.sh
+          fi
+
+      - name: Upload Debian artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-packages
+          path: dist/*.deb
+          if-no-files-found: error
+
+  build-rpm:
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:41
+
+    steps:
+      - name: Install RPM build dependencies
+        run: |
+          dnf -y install \
+            findutils \
+            gcc \
+            git \
+            make \
+            pkgconf-pkg-config \
+            rpm-build \
+            systemd-rpm-macros \
+            systemd-devel \
+            tar
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            version="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version=""
+          fi
+          echo "value=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Build RPM packages
+        shell: bash
+        run: |
+          if [ -n "${{ steps.version.outputs.value }}" ]; then
+            ./packaging/build-rpm.sh "${{ steps.version.outputs.value }}"
+          else
+            ./packaging/build-rpm.sh
+          fi
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-packages
+          path: |
+            /github/home/rpmbuild/RPMS/**/*.rpm
+            /github/home/rpmbuild/SRPMS/**/*.rpm
+          if-no-files-found: error
+
+  publish-release:
+    if: github.ref_type == 'tag'
+    needs:
+      - build-deb
+      - build-rpm
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download Debian artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages
+          path: release-artifacts/deb
+
+      - name: Download RPM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-packages
+          path: release-artifacts/rpm
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/deb/*.deb
+            release-artifacts/rpm/**/*.rpm

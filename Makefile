@@ -5,6 +5,8 @@ LDFLAGS = $(shell pkg-config --libs libsystemd)
 TARGET   = system-update-inhibitor
 SRCDIR   = daemon
 SRC      = $(SRCDIR)/inhibitor.c
+TESTDIR  = tests
+TEST_BIN = $(TESTDIR)/test_inhibitor_config
 
 PREFIX      = /usr
 SBINDIR     = $(PREFIX)/sbin
@@ -21,12 +23,20 @@ MANPAGE_DST = system-update-inhibitor.8
 EXAMPLE_SCRIPT     = examples/example-dnf-update.sh
 EXAMPLE_SCRIPT_DST = update-on-shutdown.sh
 
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall test test-build
 
 all: $(TARGET)
 
 $(TARGET): $(SRC) $(SRCDIR)/inhibitor.h
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)
+
+test-build: $(TEST_BIN)
+
+$(TEST_BIN): $(TESTDIR)/test_inhibitor_config.c $(SRC) $(SRCDIR)/inhibitor.h
+	$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test_inhibitor_config.c $(LDFLAGS)
+
+test: test-build
+	./$(TEST_BIN)
 
 install: $(TARGET)
 	install -Dm755 $(TARGET) $(DESTDIR)$(SBINDIR)/$(TARGET)
@@ -58,4 +68,5 @@ uninstall:
 
 clean:
 	rm -f $(TARGET)
+	rm -f $(TEST_BIN)
 
