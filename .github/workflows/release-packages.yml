@@ -67,8 +67,7 @@ jobs:
             container_image: fedora:41
           - target: el9
             container_image: rockylinux:9
-          - target: el10
-            container_image: rockylinux:10
+
     container:
       image: ${{ matrix.container_image }}
 
