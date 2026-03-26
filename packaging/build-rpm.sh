@@ -34,6 +34,9 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Accept tags such as v1.2.3 while preserving package-friendly version strings.
+VERSION="${VERSION#v}"
+
 if [[ -z "${VERSION}" ]]; then
     VERSION=$(git -C "${REPO_ROOT}" describe --tags --abbrev=0 2>/dev/null \
               | sed 's/^v//' || true)

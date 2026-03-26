@@ -18,6 +18,9 @@ DIST_DIR="${REPO_ROOT}/dist"
 
 VERSION="${1:-}"
 
+# Accept tags such as v1.2.3 while keeping Debian-compliant version format.
+VERSION="${VERSION#v}"
+
 if [[ -z "${VERSION}" ]]; then
     VERSION=$(git -C "${REPO_ROOT}" describe --tags --abbrev=0 2>/dev/null \
               | sed 's/^v//' || true)

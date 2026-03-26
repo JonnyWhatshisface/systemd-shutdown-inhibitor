@@ -29,6 +29,7 @@ jobs:
           else
             version=""
           fi
+          version="${version#v}"
           echo "value=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Install Debian packaging dependencies
@@ -59,8 +60,17 @@ jobs:
 
   build-rpm:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: fc41
+            container_image: fedora:41
+          - target: el9
+            container_image: rockylinux:9
+          - target: el10
+            container_image: rockylinux:10
     container:
-      image: fedora:41
+      image: ${{ matrix.container_image }}
 
     steps:
       - name: Install RPM build dependencies
@@ -90,6 +100,7 @@ jobs:
           else
             version=""
           fi
+          version="${version#v}"
           echo "value=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Build RPM packages
@@ -104,7 +115,7 @@ jobs:
       - name: Upload RPM artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-packages
+          name: rpm-packages-${{ matrix.target }}
           path: |
             /github/home/rpmbuild/RPMS/**/*.rpm
             /github/home/rpmbuild/SRPMS/**/*.rpm
@@ -130,7 +141,8 @@ jobs:
       - name: Download RPM artifacts
         uses: actions/download-artifact@v4
         with:
-          name: rpm-packages
+          pattern: rpm-packages-*
+          merge-multiple: true
           path: release-artifacts/rpm
 
       - name: Publish GitHub release assets
