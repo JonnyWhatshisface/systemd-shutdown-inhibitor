@@ -13,6 +13,17 @@
 #
 # You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# Systemd-shutdown-inhibitor
+#
+# This is a stand-alone reboot inhibitor written in Python. It listens for the
+# PrepareForShutdown() signal on DBus and executes the handle_shutdown() function
+# before allowing the system to contiune the reboot.
+#
+# This can be used for things such as installing system updates on shutdown/reboot, or
+# trigger any other scripts/behaviours you want to occur before shutting down or rebooting
+# the system.
+#
 
 import time, os, sys
 import dbus

@@ -1,0 +1,12 @@
+[Unit]
+Description=Systemd Shutdown Inhibitor (Python)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/inhibitor.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

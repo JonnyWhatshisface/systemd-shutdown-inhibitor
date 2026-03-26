@@ -1,0 +1,24 @@
+Source: system-update-inhibitor
+Section: admin
+Priority: optional
+Maintainer: Jonathan D. Hall <jon@jonathandavidhall.com>
+Build-Depends: debhelper-compat (= 13),
+               libsystemd-dev,
+               pkg-config
+Standards-Version: 4.7.0
+Homepage: https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor
+Rules-Requires-Root: no
+
+Package: system-update-inhibitor
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         systemd
+Description: Systemd shutdown inhibitor daemon
+ system-update-inhibitor registers a delay inhibitor lock with
+ systemd-logind and executes a configured script or binary when the
+ PrepareForShutdown D-Bus signal is received. The lock is held until
+ the script exits, delaying the shutdown or reboot.
+ .
+ Typical use cases include running package manager updates, firmware
+ updates, or any other tasks that must complete before shutdown.

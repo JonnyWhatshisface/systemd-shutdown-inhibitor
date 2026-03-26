@@ -1,0 +1,67 @@
+.TH SYSTEM-UPDATE-INHIBITOR 8 "March 2026" "system-update-inhibitor" "System Administration"
+.SH NAME
+system-update-inhibitor \- systemd shutdown inhibitor daemon
+.SH SYNOPSIS
+.B system-update-inhibitor
+.RI [ \-c " config_path" ]
+.SH DESCRIPTION
+.B system-update-inhibitor
+runs as a daemon and registers a delay inhibitor lock with
+.BR systemd-logind (8).
+When logind emits
+.B PrepareForShutdown
+on D-Bus, the daemon executes the configured shutdown script or binary,
+waits for it to exit, and then releases the inhibitor lock.
+.PP
+This allows system update workflows and other pre-shutdown tasks to run
+before poweroff or reboot continues.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config " "PATH"
+Path to configuration file.
+If omitted,
+.I /etc/system-update-inhibitor.conf
+is used.
+.SH CONFIGURATION
+Configuration is read from:
+.TP
+.I /etc/system-update-inhibitor.conf
+Supported keys include:
+.TP
+.B shutdown_script
+Absolute path to the executable to run on shutdown.
+.TP
+.B shutdown_script_user
+Optional user name or numeric UID to run the script as.
+.TP
+.B shutdown_script_group
+Optional group name or numeric GID to run the script as.
+.TP
+.B shutdown_script_env
+Optional environment file with one
+.I KEY=VALUE
+entry per line.
+.TP
+.B set_max_inhibit_delay
+Boolean. If true, enforce
+.B InhibitDelayMaxSec
+in logind.conf.
+.TP
+.B restart_logind_after_set
+Boolean. If true, restart logind after updating its config.
+.TP
+.B max_inhibit_delay
+Desired
+.B InhibitDelayMaxSec
+value in seconds.
+.SH FILES
+.TP
+.I /etc/system-update-inhibitor.conf
+Primary configuration file.
+.TP
+.I /usr/lib/systemd/system/system-update-inhibitor.service
+Systemd service unit file.
+.SH SEE ALSO
+.BR systemd-logind (8),
+.BR logind.conf (5),
+.BR systemctl (1)

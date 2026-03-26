@@ -1,0 +1,46 @@
+# system-update-inhibitor.conf
+#
+# Configuration for the systemd shutdown inhibitor daemon.
+# Copy this file to /etc/system-update-inhibitor.conf and edit as needed.
+# Alternatively, use the -c or --config command-line option to specify
+# a config file path.
+#
+# Path to the script to execute when a shutdown or reboot is requested.
+# The script is executed directly; it must be marked executable.
+# Shebangs, compiled binaries, Python scripts, Perl scripts, or any
+# executable format is supported. Its combined stdout and stderr are
+# captured and forwarded to syslog.
+# The inhibitor lock is released only after the script exits.
+#
+# Whether the daemon should update /etc/systemd/logind.conf to enforce
+# max_inhibit_delay. If false or omitted, logind.conf is left unchanged.
+set_max_inhibit_delay = false
+#
+# Whether to restart systemd-logind.service after changing logind.conf.
+# If false or omitted, logind.conf is updated but logind is not restarted.
+# Use this with caution. It WILL kill all login sessions if true.
+restart_logind_after_set = false
+#
+# Maximum inhibit delay, in seconds.
+#
+# If set_max_inhibit_delay = true, the daemon checks /etc/systemd/logind.conf
+# and ensures InhibitDelayMaxSec matches this value. If it differs, the daemon
+# updates logind.conf. It only restarts systemd-logind.service when
+# restart_logind_after_set = true.
+#
+# Choose a value large enough to cover your script runtime.
+max_inhibit_delay = 1800
+shutdown_script = /usr/local/sbin/update-on-shutdown.sh
+# Optional: if uncommented, the daemon switches credentials in the child
+# before executing shutdown_script. If left commented, the current daemon
+# user/group are used.
+#shutdown_script_user = root
+#shutdown_script_group = wheel
+#
+# Optional: path to an environment file to load for script execution.
+# If specified, the file is parsed as KEY=VALUE pairs (one per line),
+# comments starting with # are ignored. The environment is passed to
+# the script via execve(). If not specified, the script inherits the
+# daemon's environment.
+#shutdown_script_env = /usr/local/etc/pre-shutdown.env
+
