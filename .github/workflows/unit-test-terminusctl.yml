@@ -1,4 +1,4 @@
-name: CI
+name: Unit Test - terminusctl CLI
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   pull_request:
 
 jobs:
-  build:
+  test-terminusctl:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,5 +22,8 @@ jobs:
             pkg-config \
             libsystemd-dev
 
-      - name: Build daemon
-        run: make all
+      - name: Build test binaries
+        run: make test-build
+
+      - name: Run terminusctl CLI unit test
+        run: make test-terminusctl

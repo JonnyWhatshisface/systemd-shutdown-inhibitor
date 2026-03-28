@@ -1,5 +1,5 @@
 [Unit]
-Description=Systemd Shutdown Inhibitor (Python)
+Description=terminusd Shutdown Inhibitor (Python)
 After=network.target
 
 [Service]

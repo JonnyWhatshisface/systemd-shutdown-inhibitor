@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build a Debian package (.deb) for system-update-inhibitor.
+# Build a Debian package (.deb) for terminusd.
 #
 # Usage: build-deb.sh [VERSION]
 #
@@ -13,7 +13,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEBIAN_SRC="${SCRIPT_DIR}/debian"
-PACKAGE="system-update-inhibitor"
+PACKAGE="terminusd"
 DIST_DIR="${REPO_ROOT}/dist"
 
 VERSION="${1:-}"
@@ -47,7 +47,7 @@ echo "--> Exporting source from working tree"
     tar \
         --exclude='.git' \
         --exclude='./dist' \
-        --exclude='./system-update-inhibitor' \
+    	--exclude='./terminusd' \
         -cf - .
 ) | tar -xf - -C "${SRCDIR}"
 

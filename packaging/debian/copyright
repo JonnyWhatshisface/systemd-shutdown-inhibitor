@@ -1,5 +1,5 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: system-update-inhibitor
+Upstream-Name: terminusd
 Upstream-Contact: Jonathan D. Hall <jon@jonathandavidhall.com>
 Source: https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor
 

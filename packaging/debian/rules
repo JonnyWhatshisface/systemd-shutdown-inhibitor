@@ -5,8 +5,8 @@ export DH_VERBOSE = 1
 	dh $@
 
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/system-update-inhibitor \
-		LOCALBINDIR=/usr/share/doc/system-update-inhibitor/examples
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/terminusd \
+		EXAMPLESDIR=/opt/terminusd/scripts
 
 override_dh_installsystemd:
-	dh_installsystemd --no-enable system-update-inhibitor.service
+	dh_installsystemd terminusd.service

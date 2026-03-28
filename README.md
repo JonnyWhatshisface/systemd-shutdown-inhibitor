@@ -1,117 +1,272 @@
 
-# Systemd Shutdown/Reboot Update Inhibitor
+# terminusd
 
-An inhibitor that waits for PrepareForShutdown() signal on DBUS and inhibits the shutdown/reboot until desired scripts/binaries/actions have completed.
+[![CI](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/ci.yml/badge.svg)](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/ci.yml)
 
-The inhibitors hold the current state of systemd so it's not in a shutdown state at the time the actions are being executed. This allows for scripts to install system and package updates on shutdown/reboot without the packages failing due to systemctl commands failing.
+[![Unit Test - Config Parser](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-config.yml/badge.svg)](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-config.yml)
 
-# Background
+[![Unit Test - DBus Test Mode](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-dbus-test-mode.yml/badge.svg)](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-dbus-test-mode.yml)
 
-Systemd introduced a system-update state for installing updates automatically when shutting down or rebooting. This unfortunately introduced a dual-reboot mechanic. The dual-reboot occurs because once systemd is in a shutdown state, **systemctl** commands will fail. Given many packages will execute **systemctl** commands as part of their pre/post installations options, this could leave the package in a broken or corrupted state. 
+[![Unit Test - terminusctl CLI](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-terminusctl.yml/badge.svg)](https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor/actions/workflows/unit-test-terminusctl.yml)
 
-The solution of using a dual-reboot does indeed get around this problem, because the updates are installed while the system is on its first boot and enters the system-update-service. However, the dual-reboot has a significant impact in some organizations.
+Deterministic shutdown orchestration and admission control for Linux.
 
-Large systems can sometimes take a substantial amount of time to complete POST, bringing significant reboot times.
+terminusd gives you total control of shutdowns/reboots on your systems.
 
+First, it orchestrates pre-shutdown actions in deterministic priority order with parallel execution inside each priority group - and critical gate keeping configuration - while systemd is still fully operational. Package updates, service operations and maintenance workflows can complete cleanly in the order you need them to.
 
-Systemd supports inhibitors that will allow you to do exactly as the name implies - inhibit systemd during shutdowns and reboots so the state of systemd is not yet in a shutdown state while the inhibitor is held in place. 
+Second, its  shutdown guard can deterministically enable or disable shutdown/reboot on a system entirely, based on your own defined scripted outcomes or directives.
 
-While inhibited, all systemctl commands function normally, including service start, start, enable, disable and mask. Any and all other systemctl commands also work as normal. Thus, this becomes a good state to install package updates and anything else desired.
+## Why terminusd
+
+Systemd offers a system-update path, but many environments need two deterministic controls that are hard to express with default shutdown behavior of systemd alone:
+
+1. Deterministic shutdown action orchestration: run exactly the right actions, in the right order, before poweroff/reboot. This is critical for things such as package installations/updates that may require services be shutdown as part of the installation, which often require using the dual-reboot method of system-update in systemd.
+
+2. Deterministic shutdown admission control: explicitly allow or deny shutdown/reboot based on real runtime conditions for your environment. For instance, avoiding shutting down the only member of an HA cluster while running in BCP mode.
+
+**terminusd addresses these gaps.**
+
+* Holds a delay inhibitor while shutdown begins to execute configured actions in strict priority order and critical dependencies that abort further actions on failure. The delay timeout is entirely configurable, and during this time, systemd is not in a shutdown state, allowing for full systemctl command execution and safe package installation and upgrades, with the ability to selectively execute actions before, after and in-between to suit your environment.
+
+* Built in `shutdown_guard` can entirely disable shutdown/reboot commands based on script outcomes or directives.
   
-## How does the inhibitor work?
+## Core capabilities
+
+
+- Ordered shutdown execution with priority groups.
+
+- Parallel execution within the same priority.
+
+- Critical step support to abort remaining work if a key action fails.
+
+- Script-driven shutdown guard that can deterministically enable/disable shutdown and reboot.
+
+- Runtime control interface (`terminusctl`) to override, reconfigure and control state from the cli
+
+- Config drop-ins (`/etc/terminus.d`) for composable configuration management.
+
   
-The inhibitor works by first registering itself as a **delay** inhibitor, and then hooking in to DBus to listen for the **PrepareForShutdown()** message. A signal is registered to execute a callback once the **PrepareForShutdown()** message is seen.  The callback is where we execute our actions.
 
-## Why use a delay inhibitor instead of a block inhibitor?
+## How it works
 
-The block inhibitors are ignored when shutdown or reboot commands are issued by root. I've tried working with the systemd community in the past to add a configuration option for root to honor block inhibitors, but it was rejected and argued repeatedly. 
+### Shutdown Actions:  
 
-Delay inhibitors are inherently safer because they will eventually time out based on the of **InhibitDelayMaxSec** in **/etc/systemd/logind.conf**. When the value there is reached, the inhibitor will let go even if whatever tasks it's doing is not completed, and the system will continue with its shutdown.
+1.  `terminusd` starts and acquires a systemd delay inhibitor lock.
 
-However, this behaviour makes setting an appropriate value critical. If your tasks complete before the **InhibitDelayMaxSec** value is reached, then the inhibitor will let go and the shutdown will continue whether your actions have completed or not.
+2. It subscribes to `PrepareForShutdown` on D-Bus.
 
-## Is there any risk with adding too high of a value for InhibitDelayMaxSec?
+3. On shutdown/reboot, it runs configured sections by ascending `priority`.
 
-Aadding a high value does not delay the reboot/shutdown sequence any longer than is needed by the script/tasks you're executing. When the tasks/scripts are finished, and the file descriptor for the inhibitor is closed, the system will resume rebooting or halting as normal.
+4. If a critical section fails, remaining groups are skipped.
 
-The **InhibitDelayMaxSec** is only used as a fail-safe to force resuming the shutdown/reboot operation if the inhibitor has held the lock beyond that duration of time.
+5. The inhibitor is released and system shutdown continues.
 
-## I'm already using the system-update mechanism with dual reboots. Do I have to change anything to use this? 
+### Shutdown Guard
 
-The inhibitor is a drop-in that can act as either a replacement or an enhancement to the current dual-reboot mechanisms in use today.
+1. persist - Runs user-defined script/program in a persist mode that it actively monitors, allowing the script/program to dynamically enable and disable system shutdown/reboot on the machine based on your criteria. (Yes, it even disables shutdown/reboot from root!)
 
-Integration may be implementation specific depending on how you've leveraged the dual-reboot update mechanism, but it generally works via some systemd unit file creating the /system-update symlink which is seen at boot time to enter the system-update state.
+2. oneshot - Run your script/program at defined intervals with a defined threshold. Non-zero exit code indicates a failure, and at X failures, system shutdown/reboots will be disabled system-wide. A zero exit code will re-enable them.
 
-The inibitor itself can be dropped in right along-side that implementation, provided the script you execute to do the updates is properly removing the /system-update symlink when it's finished. 
+### terminusctl
 
-With this method, if the inhibitor is stopped, removed or the updates fail during that time, the /system-update symlink will still exist and the system will enter update state on the next boot.
+CLI control for terminus to override its state, [re]enabled or disable shutdowns, reload configuration, update the max inhibit time and print out the ordered exeuction of your configured scripts to visualize what will happen on shutdown.
+  
 
-## How do I implement it?
+## Installation
 
-You simply run it and make sure you have your update script in place.
+  
 
-There are two versions included in this repository:
+### Build from source
 
-* system-update-inhibitor daemon
-* inhibitor Python script
+  
 
-The **Python script** is a stand-alone inhibitor that can be edited/modified directly in the script.
+```bash
+make
+sudo  make  install
+```
+This installs:
 
-The **Daemon** includes a configuration file (*/etc/system-update-inhibitor.conf*) which sould be configured accordingly.
+-  `terminusd` and `terminusctl` to `/usr/sbin`
+- service unit to `/usr/lib/systemd/system/terminusd.service`
+- man pages to `/usr/share/man/man8`
+- default config to `/etc/terminusd.conf`
+- drop-in examples to `/etc/terminus.d`
+- script examples to `/opt/terminusd/scripts`
 
-All that needs to happen after this is running the inhibitor as root to register the delay inhibitor.
+### Enable and start
 
-### Setup system-update-inhibitor
+```bash
+sudo  systemctl  daemon-reload
+sudo  systemctl  enable  --now  terminusd.service
+```
+OR
+```bash
+temrinusctl start
+```
 
-Implement your update procedure in an external script/binary and point the daemon config at it with `shutdown_script`. By default, the daemon installs its configuration at `/etc/system-update-inhibitor.conf` and also adds a `/usr/local/sbin/update-on-shutdown.sh` which runs *dnf upgrade* to install package updates on shutdown/reboot.
+## Configuration
 
-You can either modify `/usr/local/sbin/update-on-shutdown.sh` or replace the path in `/etc/system-update-inhibitor.conf` with your own.
+  
 
-The daemon executes `shutdown_script` when `PrepareForShutdown()` is received, waits for it to fully complete, logging stdout/stderr plus the final exit result to syslog (`daemon` facility).
+Primary config: `/etc/terminusd.conf`
 
-Example config:
+Optional drop-ins: `/etc/terminus.d/*.conf` (loaded in lexical order after the main file).
 
-> set_max_inhibit_delay = true
-> shutdown_script = /usr/local/sbin/pre-shutdown.sh
->  shutdown_script_user = root
->  shutdown_script_group = wheel
+### Minimal example
 
-If `shutdown_script_user` and/or `shutdown_script_group` are set in the config, the daemon applies those credentials in the child process immediately before executing the configured script or binary. If they are left commented out, the script runs with the daemon's existing credentials.
+```ini
 
-### Setup Systemd
+[main]
+# Set the InhibitDelayMaxSec value in login.d
+# to max_inhibit_delay (if not already set)
+set_max_inhibit_delay = true
+# Max amount of time the inhibitor can hold
+# systemd in a pre-shutdown state
+max_inhibit_delay = 2700
+# Scripts to execute on shutdown/reboot.
+# Scripts with maching priority execute
+# in parallel. Full arguments can be put
+# in the command. Critical scripts failing
+# result in cancelling running of any further
+# priority groups and let the reboot happen
+# immediately after completion of the group.
+[notifyusers]
+command = /opt/terminusd/scripts/example-shutdown-notify.sh
+priority = 100
+[stop_certain_services]
+command = /usr/local/bin/svc-stop-on-shutdown.sh --force
+priority = 100
+critical = true
+[applyupdates]
+command = /opt/terminusd/scripts/example-package-updates.sh
+priority = 1000
+critical = true
+[firmware_updates]
+command = /usr/local/bin/update_firmwares.sh --all
+priority = 2000
+```
 
-This implementation uses a **Delay** inhibitor which will only inhibit systemd's shutdown state up to a pre-defined period of time. If the update script finishes sooner than this time the inhibitor will exit and release the delay allowing the system to move forward. If the update exceeds the amount of time specified then the system will forcefully reboot regardless of whether the scripts executed by the inhibitor have finished.
+### Important main options
 
-For easier configuration, the daemon can read `max_inhibit_delay` from its config file as the desired shutdown inhibit window and can automatically update **/etc/systemd/logind.conf** if `set_max_inhibit_delay = true` in the config. If that flag is omitted or set to `false`, the daemon leaves `logind.conf` unchanged. 
+-  `set_max_inhibit_delay`: write daemon's configured delay into `/etc/systemd/logind.conf` if the value is not already matching `max_inhibit_delay`
 
-Additionally, the daemon can immediately apply the new value for `max_inhibit_delay` by restarting `systemd-logind.service` **only if** `restart_logind_after_set = true`. **This option should be used with caution, because it will end all current logind sessions upon doing so.**
+-  `max_inhibit_delay`: desired inhibit timeout window in seconds. Used for set and for checking the value.
 
-### If you want to configure it yourself in systemd-logind:
+-  `restart_logind_after_set`: immediately apply delay by restarting logind (use cautiously!)
 
-Make sure you set the `InhibitDelayMaxSec` to the value you want in `/etc/systemd/logind.conf`. Example:
+### Script section options
+  
+-  `command` 
+Full command-line with path and arguments.
 
->InhibitDelayMaxSec = 1800
+-  `priority` (default `1000`)
+Multiple actions with the same priority become a "priority group" and execute in parallel.
 
-In environments where firmware updates and package updates are taking place, it's recommended to use sane values here (ie 45 minutes or so) to ensure those firmware updates are not interrupted and you don't end up bricking a device. 
+-  `user`, `group` (optional)
+The user and group to run the script as. By default, they run as root.
 
-### Start the Inhibitor
+- `env` (optional - inherits daemons env by default)
+Full path to a file containing KEY=VALUE lines to use as the environment for the execution.
 
-At this point you only need to start the inhibitor.
+-  `critical` (default `false`)
+Tasks marked as critical must exit non-zero in order for the next priority group to be executed. Any single task marked critical failing will fail the entire priority group, and no further tasks will be executed, letting go of the inhibitor and rebooting/shutting down the machine immediately.
 
-The daemon and python versions both include a systemd unit file for convenience.
+-  `enabled` (default `true`)
+Any drop-ins or entries with `enabled = false` will not be loaded or executed.
+  
+## Runtime control (terminusctl)
 
-#### For the daemon:
-Enable the unit file with:
->systemctl enable system-update-inhibitor.service
+ 
+terminusctl gives flexible control and override capabilities to terminusd, allowing you to visualize the actions, reconfigure it without reload, override the shutdown/reboot admission state and trigger reboots directly from it, optionally skipping the configured shutdown actions.
 
-If you wish to start the daemon without rebooting, then simply start it with systemctl:
->systemctl start system-update-inhibitor.service
+It is usable only by root.
 
-#### Running the Python script
+```bash
+$ ./terminusctl --help
+Usage: ./terminusctl [options] <command> [args]
 
-There is a unit file included that you can manually install by copying it to `/etc/systemd/system` and then running:
->systemctl enable system-update-inhibitor.service
->systemctl start system-update-inhibitor.service
+Commands:
+  start                 Start the terminusd daemon
+  stop                  Stop the terminusd daemon
+  status                Show current daemon runtime status
+  reload-config         Reload scripts/config while daemon is running
+  shutdown-guard        enable|disable shutdown guard
+  shutdown-commands     enable|disable shutdown commands
+  system-reboot         Request reboot through daemon control path
+  system-shutdown       Request shutdown through daemon control path
 
-You can also test the functionality by simply running it as root. As long as the inhibitor is running, it will be triggered on shutdown/reboot. To unregister it, simply kill the process/stop the service.
+Options:
+  -f, --force           Skip confirmation prompt for reboot/shutdown
+  --set-logind-inhibitor-delay
+                        Write daemon's configured max inhibit delay to logind.conf
+  --skip-scripts        With system-reboot/system-shutdown, skip script execution
+  -h, --help            Show this help
 
+```
+
+  
+
+## Shutdown guard modes
+
+`shutdown_guard` supports two modes:
+
+-  `oneshot`: run command every interval; mask shutdown targets after threshold consecutive failures.
+
+-  `persist`: keep a long-running process active and let it emit directives:
+
+-  `shutdown_guard_disable_shutdown 1`
+
+-  `shutdown_guard_disable_shutdown 0`
+
+This gives the ultimate flexibility for making decisions on when and why to disable reboots on a system, giving total control to do so based on your environments needs that go beyond just user permission. **Avoid embarrassing outages from accidental reboots during reduced capacity in a BCP event.**
+
+Example guard scripts are installed under `/opt/terminusd/scripts`.
+
+## Safety model
+
+ 
+- Delay inhibitors are bounded by `InhibitDelayMaxSec`, so shutdown cannot be held indefinitely. When this value is exceeded, the system proceeds with shutting down regardless of status of actions. 
+
+- Inhibitor is released immediately when work completes.
+
+- Critical sections protect against partial maintenance states.
+
+
+## Testing
+
+Run all tests:
+
+```bash
+make  test
+```
+Run specific suites:
+
+```bash
+make  test-config
+make  test-test-mode
+make  test-terminusctl
+```
+
+## Packaging
+
+Build Debian package:
+
+```bash
+bash  packaging/build-deb.sh
+```
+
+Build RPM package:
+
+```bash
+bash  packaging/build-rpm.sh
+```
+
+## Man pages
+
+-  `man 8 terminusd`
+-  `man 8 terminusctl`
+  
+## License
+
+terminusd is proudly licensed under GPL-3.0-or-later. See [LICENSE](LICENSE).

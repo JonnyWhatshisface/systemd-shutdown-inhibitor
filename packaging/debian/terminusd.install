@@ -1,0 +1,2 @@
+daemon/etc/terminus.d/notifyusers.conf etc/terminus.d/
+daemon/etc/terminus.d/applyupdates.conf etc/terminus.d/

@@ -1,0 +1,1085 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>terminusd - Predictable Shutdown Orchestration for Linux</title>
+    <meta name="description" content="terminusd is a shutdown inhibitor daemon for Linux. Run priority-based commands before reboot or poweroff with clear logs, safe defaults, and production-grade control.">
+    <style>
+        :root {
+            --bg: #0b0f13;
+            --panel: #121922;
+            --panel-2: #0f151d;
+            --text: #d7e1ea;
+            --muted: #99adbf;
+            --accent: #8cd27d;
+            --accent-2: #d8b36c;
+            --line: #263445;
+            --glow: rgba(140, 210, 125, 0.25);
+            --max: 1120px;
+            --radius: 14px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(1200px 700px at 85% -20%, #1a2a3a 0%, transparent 55%),
+                        radial-gradient(1000px 800px at -15% -30%, #1f2228 0%, transparent 50%),
+                        var(--bg);
+            color: var(--text);
+            font-family: "IBM Plex Mono", "Liberation Mono", "Courier New", monospace;
+            line-height: 1.5;
+        }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .shell-grid {
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 28px 28px;
+            mask-image: radial-gradient(ellipse at center, black 35%, transparent 90%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 1;
+            max-width: var(--max);
+            margin: 0 auto;
+            padding: 24px 18px 72px;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 14px;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: rgba(11, 15, 19, 0.78);
+            backdrop-filter: blur(5px);
+        }
+
+        .brand {
+            display: flex;
+            gap: 8px;
+            align-items: baseline;
+            font-size: 15px;
+            letter-spacing: 0.02em;
+        }
+
+        .brand strong {
+            color: var(--accent);
+            text-shadow: 0 0 10px var(--glow);
+        }
+
+        .top-links {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .hero {
+            margin-top: 22px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: linear-gradient(165deg, rgba(18,25,34,0.92), rgba(15,21,29,0.92));
+            overflow: hidden;
+            box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+            animation: rise 600ms ease-out both;
+        }
+
+        .hero-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(0, 0, 0, 0.24);
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .dots {
+            display: inline-flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0.88;
+        }
+
+        .dot:nth-child(1) { background: #f27474; }
+        .dot:nth-child(2) { background: #d8b36c; }
+        .dot:nth-child(3) { background: #8cd27d; }
+
+        .hero-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 22px;
+            padding: 22px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(24px, 4.6vw, 42px);
+            line-height: 1.04;
+            letter-spacing: -0.01em;
+        }
+
+        .tagline {
+            margin-top: 12px;
+            color: var(--muted);
+            font-size: clamp(14px, 1.8vw, 17px);
+            max-width: 62ch;
+        }
+
+        .cta {
+            margin-top: 18px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-block;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 13px;
+            letter-spacing: 0.02em;
+        }
+
+        .btn.primary {
+            background: linear-gradient(180deg, #99e08a, #6bb45d);
+            color: #10210f;
+            border-color: #8bd17c;
+        }
+
+        .btn.ghost {
+            background: #0e141c;
+            color: var(--text);
+        }
+
+        .terminal {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 14px;
+            background: #090d12;
+            color: #c6d7e5;
+            font-size: 12.8px;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+        }
+
+        .terminal pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .terminal .ok {
+            color: var(--accent);
+        }
+
+        .terminal .warn {
+            color: var(--accent-2);
+        }
+
+        .terminal .error {
+            color: #f27474;
+        }
+
+        .section {
+            margin-top: 22px;
+            border: 1px solid var(--line);
+            border-radius: var(--radius);
+            background: linear-gradient(170deg, rgba(18,25,34,0.9), rgba(14,20,28,0.9));
+            padding: 20px;
+            animation: rise 650ms ease-out both;
+        }
+
+        .section h2 {
+            margin: 0 0 8px;
+            font-size: 21px;
+        }
+
+        .section p {
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .features {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: rgba(10, 15, 22, 0.7);
+            padding: 12px;
+        }
+
+        .card h3 {
+            margin: 0;
+            font-size: 15px;
+            color: var(--accent);
+        }
+
+        .card p {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .flow {
+            margin-top: 14px;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .step {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 12px;
+            background: rgba(11, 16, 24, 0.72);
+        }
+
+        .step strong {
+            display: block;
+            color: var(--accent-2);
+            margin-bottom: 6px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .step span {
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .foot {
+            margin-top: 22px;
+            color: var(--muted);
+            font-size: 12px;
+            text-align: center;
+        }
+
+        @keyframes rise {
+            from {
+                transform: translateY(10px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 960px) {
+            .hero-body {
+                grid-template-columns: 1fr;
+            }
+
+            .features {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .flow {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .wrap {
+                padding: 14px 12px 42px;
+            }
+
+            .topbar {
+                padding: 10px;
+            }
+
+            .hero-body,
+            .section {
+                padding: 14px;
+            }
+
+            .features,
+            .flow {
+                grid-template-columns: 1fr;
+            }
+
+            .top-links {
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+
+        .hero-anim-terminal {
+            overflow-y: auto;
+            height: 340px;
+            scroll-behavior: smooth;
+        }
+
+        .guard-anim-terminal {
+            overflow-y: auto;
+            height: 430px;
+            scroll-behavior: smooth;
+        }
+
+        .ordered-anim-terminal {
+            overflow-y: auto;
+            height: 420px;
+            scroll-behavior: smooth;
+            margin-top: 16px;
+        }
+
+        .hero-anim-terminal pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .guard-anim-terminal pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .ordered-anim-terminal pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .hero-cursor {
+            display: inline-block;
+            width: 0.52em;
+            height: 1.05em;
+            background-color: var(--accent);
+            vertical-align: text-bottom;
+            margin-left: 1px;
+            animation: term-blink 1.1s step-end infinite;
+        }
+
+        @keyframes term-blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell-grid" aria-hidden="true"></div>
+    <main class="wrap">
+        <header class="topbar">
+            <div class="brand">
+                <span>$</span>
+                <strong>terminusd</strong>
+                <span>- shutdown control for Linux</span>
+            </div>
+            <nav class="top-links" aria-label="Primary">
+                <a href="#features">Features</a>
+                <a href="#how">How It Works</a>
+                <a href="#terminusctl">terminusctl</a>
+                <a href="#start">Quick Start</a>
+            </nav>
+        </header>
+
+        <section class="hero" id="start">
+            <div class="hero-head">
+                <div class="dots" aria-hidden="true">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+                <span>tty0 :: system shutdown window</span>
+            </div>
+            <div class="hero-body">
+                <div>
+                    <h1>Control shutdowns. Completely.</h1>
+                    <p class="tagline">
+                        terminusd is a lightweight shutdown inhibitor daemon that gives you precise control over
+                        shutdowns, reboots, and poweroffs. Build a priority-based workflow for what runs before the
+                        system goes down, block or allow reboot activity based on your criteria, and apply updates and
+                        patches safely while services are still available.
+                    </p>
+                    <div class="cta">
+                        <a class="btn primary" href="https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor">View Source</a>
+                        <a class="btn ghost" href="../README.md">Read Docs</a>
+                    </div>
+                </div>
+                <aside class="terminal hero-anim-terminal" id="hero-anim-wrap" aria-label="Animated terminusctl demo">
+<pre id="hero-anim-pre"></pre>
+                </aside>
+            </div>
+        </section>
+
+        <section class="section" id="features">
+            <h2>Why terminusd</h2>
+            <p>
+                Built for those who need reliable control of shutdown, reboot, and poweroff orchestration without heavyweight tooling.
+                You get deterministic order of actions, safe package upgrades, coordinated cluster failover, and guardrails against 
+                accidental reboots - all with a simple config and clear logs. All before systemd even enters shutdown state.
+            </p>
+            <div class="features">
+                <article class="card">
+                    <h3>Priority Groups</h3>
+                    <p>Commands run in ascending ordered <code>priority groups</code>, with parallelism per group for faster shutdown windows.</p>
+                </article>
+                <article class="card">
+                    <h3>Critical Abort Guardrails</h3>
+                    <p>Mark essential steps as <code>critical</code>. A failure on any critical task halts later groups, preventing half-finished maintenance.</p>
+                </article>
+                <article class="card">
+                    <h3>Drop-in Friendly Config</h3>
+                    <p>Easily drop configuration into <code>/etc/terminus.d</code> making it simple to manage and configure with any configuration management.</p>
+                </article>
+                <article class="card">
+                    <h3>Shutdown/Reboot Guard</h3>
+                    <p>Enable/Disable shutdowns and reboots based on your own criteria, preventing accidental system interruptions. Even by root.</p>
+                </article>
+                <article class="card">
+                    <h3>Privilege + Env Control</h3>
+                    <p>Run tasks as specific users/groups, each with their own environment specifications.</p>
+                </article>
+                <article class="card">
+                    <h3>Dry Run Capabilities</h3>
+                    <p>Preview the full shutdown plan without executing anything in test mode before rollout, so production behavior is understandable in advance.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section" id="how">
+            <h2>Ordered Shutdown Actions</h2>
+            <p>
+                terminusd acquires a systemd delay inhibitor lock and listens for shutdown signals over D-Bus. When a shutdown is
+                requested, it holds systemd in a pre-shutdown state so service control and normal operations are still available while
+                your workflow runs.
+                <br><br>
+                During that window, terminusd executes scripts, commands, or binaries in ordered priority groups, with optional critical
+                gating. If a critical task fails, later groups do not run, preventing half-finished maintenance.
+                <br><br>
+                Once execution is complete, the inhibitor is released and shutdown proceeds cleanly.
+            </p>
+            <div class="flow">
+                <div class="step"><strong>1. Inhibit</strong><span>Daemon starts and registers delay lock with logind.</span></div>
+                <div class="step"><strong>2. Trigger</strong><span>Daemon monitors for pre-shutdown signal over D-Bus.</span></div>
+                <div class="step"><strong>3. Execute</strong><span>Runs ordered commands with optional critical gating.</span></div>
+                <div class="step"><strong>4. Release</strong><span>Lock is released and shutdown proceeds cleanly.</span></div>
+            </div>
+            <aside class="terminal ordered-anim-terminal" id="ordered-anim-wrap" aria-label="Ordered shutdown actions animated output">
+<pre id="ordered-anim-pre"></pre>
+            </aside>
+        </section>
+        <section class="section" id="how">
+            <h2>Shutdown Guard</h2>
+            <p>
+                The shutdown guard lets you dynamically allow or block shutdowns, reboots, and poweroffs through normal system
+                commands, even for root. Use a custom script or binary to drive that state based on your own conditions,
+                either through scheduled checks with configurable thresholds or by continuously monitoring and signaling
+                terminusd directly.
+                <br><br>
+                Prevent accidental reboots during BCP or critical maintenance windows, and reduce outage risk by ensuring shutdowns
+                only happen when your environment is truly ready.
+            </p>
+        <aside class="terminal guard-anim-terminal" id="guard-anim-wrap" aria-label="Animated shutdown guard demo">
+    <pre id="guard-anim-pre"></pre>
+        </aside>
+        </section>
+
+        <section class="section" id="terminusctl">
+            <h2>terminusctl — Runtime Control at Your Fingertips</h2>
+            <p>
+                terminusctl is the companion control client for terminusd, built for live operational control without
+                editing configuration files or restarting the daemon.
+                <br><br>
+                Check current state, manage shutdown controls, enable or disable the shutddown guard and reload configuration on the fly.
+            </p>
+            <div class="features" style="margin-top: 14px;">
+                <article class="card">
+                    <h3>Live Status</h3>
+                    <p>See configured delays, live logind inhibitor alignment, guard state and the full ordered shutdown execution plan.</p>
+                </article>
+                <article class="card">
+                    <h3>Dynamic Shutdown Guard Control</h3>
+                    <p>Enable or disable the shutdown guard without touching config files or restarting the daemon.</p>
+                </article>
+                <article class="card">
+                    <h3>Logind Sync</h3>
+                    <p>Push the daemon's configured inhibit delay into logind.conf on demand, keeping systemd and terminusd in sync without a manual edit.</p>
+                </article>
+            </div>
+            <aside class="terminal" style="margin-top: 16px;" aria-label="terminusctl help output">
+<pre>
+<span class="ok">$ terminusctl help</span>
+Usage: terminusctl [options] &lt;command&gt; [args]
+
+Commands:
+  start                 Start the terminusd daemon
+  stop                  Stop the terminusd daemon
+    status                Show current daemon runtime status
+    reload-config         Reload scripts/config while daemon is running
+    shutdown-guard        enable|disable shutdown guard
+    shutdown-commands     enable|disable shutdown commands
+    system-reboot         Request reboot through daemon control path
+    system-shutdown       Request shutdown through daemon control path
+
+Options:
+    -f, --force           Skip confirmation prompt for reboot/shutdown
+  --set-logind-inhibitor-delay
+                        Write daemon's configured max inhibit delay to logind.conf
+    --skip-scripts        With system-reboot/system-shutdown, skip script execution
+  -h, --help            Show this help
+
+<span class="ok">$ terminusctl status</span>
+========================================
+            terminusd status
+========================================
+
+Inhibitor Settings
+(Maximum amount of time shutdown can be delayed during executions)
+------------------
+Daemon Max Delay       : 2700s
+Logind Max Delay       : 2700s
+Delay Match            : yes
+
+Shutdown Controls
+-----------------
+Shutdown Requests      : enabled
+Shutdown Guard         : enabled
+Guard Type             : persist
+Guard Command          : /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
+
+Shutdown Execution Plan 
+(Equal priority items run in parallel)
+-----------------------
+Enabled scripts        : 4
+Priority 100           : notifyusers
+    Command              : /opt/terminusd/scripts/example-shutdown-notify.sh
+    Critical             : no
+Priority 200           : hagrp-migrate
+    Command              : /usr/local/bin/migrate_services.sh --force
+    Critical             : yes
+Priority 300           : stopvcs
+    Command              : /usr/local/bin/shutdown_vcs_services.sh
+    Critical             : yes
+Priority 400           : apply-package-updates
+    Command              : /opt/terminusd/scripts/example-package-updates.sh
+    Critical             : yes
+Priority 400           : apply-firmware-updates
+    Command              : /opt/terminusd/scripts/update-firmwares.sh
+    Critical             : yes
+Priority 900           : final-sync
+    Command              : /usr/loca/bin/final-shutdown-steps.py --sync
+    Critical             : no
+</pre>
+            </aside>
+        </section>
+
+        <section class="section" id="use-cases">
+            <h2>Use Cases</h2>
+            <p>terminusd fits anywhere shutdown timing matters. These are a few practical ways to use it in real environments.</p>
+            <div class="features">
+                <article class="card">
+                    <h3>Installing Updates Safely</h3>
+                    <p>Install packages and apply updates while system services are still available, so maintenance can finish cleanly before shutdown continues.</p>
+                </article>
+                <article class="card">
+                    <h3>Cluster Failover and Preparation</h3>
+                    <p>Run failover and service migration steps in a controlled order, making sure workloads move cleanly before a node goes down.</p>
+                </article>
+                <article class="card">
+                    <h3>Disable Reboots When BCP Active</h3>
+                    <p>Block accidental reboots during BCP or degraded HA conditions, reducing the chance of turning a bad state into a full outage.</p>
+                </article>
+            </div>
+        </section>
+
+        <footer class="foot">
+            terminusd • pragmatic Linux shutdown control with an old-school Unix heartbeat
+        </footer>
+    </main>
+<script>
+(function () {
+    'use strict';
+    var pre  = document.getElementById('hero-anim-pre');
+    var wrap = document.getElementById('hero-anim-wrap');
+    if (!pre || !wrap) return;
+
+    var PROMPT     = '# ';
+    var TYPE_MIN   = 34;
+    var TYPE_JITTER = 26;
+    var CMD_PAUSE  = 380;
+    var LINE_DELAY = 52;
+    var STEP_GAP   = 6000;
+    var END_PAUSE  = 120000;
+
+    function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function ln(text, cls) { return { text: text || '', cls: cls || '' }; }
+
+    var steps = [
+        {
+            cmd: 'terminusctl --help',
+            out: [
+                ln('Usage: terminusctl [options] <command> [args]'),
+                ln(''),
+                ln('Commands:'),
+                ln('  start                 Start the terminusd daemon'),
+                ln('  stop                  Stop the terminusd daemon'),
+                ln('  status                Show current daemon status'),
+                ln('  reload-config         Reload scripts/config'),
+                ln('  shutdown-guard        enable|disable shutdown guard'),
+                ln('  shutdown-commands     enable|disable shutdown commands'),
+                ln('  system-reboot         Request reboot through daemon'),
+                ln('  system-shutdown       Request shutdown through daemon'),
+                ln(''),
+                ln('Options:'),
+                ln('  -f, --force           Skip confirmation prompt'),
+                ln('  --set-logind-inhibitor-delay'),
+                ln('                        Write daemon inhibit delay to logind.conf'),
+                ln('  --skip-scripts        Skip script execution'),
+                ln('  -h, --help            Show this help'),
+            ]
+        },
+        {
+            cmd: 'terminusctl status',
+            out: [
+                ln('========================================'),
+                ln('            terminusd status'),
+                ln('========================================'),
+                ln(''),
+                ln('Inhibitor Settings'),
+                ln('------------------'),
+                ln('Daemon Max Delay       : 30s'),
+                ln('Logind Max Delay       : 30s'),
+                ln('Delay Match            : yes'),
+                ln(''),
+                ln('Shutdown Controls'),
+                ln('-----------------'),
+                ln('Shutdown Requests      : disabled', 'error'),
+                ln('Shutdown Guard         : enabled'),
+                ln('Guard Type             : persist'),
+                ln('Guard Command          : /opt/terminusd/scripts/example-persistent-shutdown-guard.sh'),
+                ln(''),
+                ln('Shutdown Execution Plan'),
+                ln('-----------------------'),
+                ln('Enabled scripts        : 4'),
+                ln('Priority 100           : notifyusers'),
+                ln('  Command              : /opt/terminusd/scripts/notify.sh'),
+                ln('  Critical             : no'),
+                ln('Priority 200           : drain-app'),
+                ln('  Command              : /usr/local/bin/drain-app-traffic --timeout 20'),
+                ln('  Critical             : yes', 'warn'),
+                ln('Priority 300           : applyupdates'),
+                ln('  Command              : /opt/terminusd/scripts/applyupdates.sh'),
+                ln('  Critical             : no'),
+                ln('Priority 900           : final-sync'),
+                ln('  Command              : /usr/bin/sync'),
+                ln('  Critical             : no'),
+            ]
+        },
+        {
+            cmd: 'cat /var/log/messages | grep terminusd',
+            lineDelay: 68,
+            out: [
+                ln('Mar 28 09:14:02 localhost terminusd[1842]: inhibitor lock acquired (fd=5)'),
+                ln('Mar 28 09:14:02 localhost terminusd[1842]: listening for pre-shutdown on D-Bus'),
+                ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persist mode: command="/opt/terminusd/scripts/example-persistent-shutdown-guard.sh"'),
+                ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persistent user-defined guard started (pid 1849)'),
+                ln('Mar 28 09:44:18 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 1/3)', 'warn'),
+                ln('Mar 28 09:44:48 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 2/3)', 'warn'),
+                ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] WARNING: Failure threshold reached; requesting shutdown disable', 'warn'),
+                ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] DISABLED shutdowns', 'warn'),
+            ]
+        },
+        {
+            cmd: '/usr/sbin/reboot',
+            cmdPause: 180,
+            out: [ ln('Call to Reboot failed: Access denied', 'error') ]
+        },
+        {
+            cmd: 'systemctl reboot',
+            cmdPause: 180,
+            out: [ ln('Call to Reboot failed: Access denied', 'error') ]
+        },
+        {
+            cmd: 'terminusctl shutdown-commands enable',
+            out: [
+                ln('shutdown enabled', 'ok'),
+            ]
+        },
+        {
+            cmd: 'reboot',
+            out: [
+                ln('NOTICE: broadcast wall message to logged-in users', 'warn'),
+                ln('Broadcast message from root@localhost:'),
+                ln('  System is preparing for shutdown. Please save your work and log out.'),
+            ]
+        },
+        {
+            cmd: 'cat /var/log/messages | grep -i terminus',
+            lineDelay: 68,
+            out: [
+                ln('Mar 28 09:46:02 localhost terminusd[1842]: [notifyusers] Launching command="/opt/terminusd/scripts/example-shutdown-notify.sh" priority=100 user=root group=root'),
+                ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
+                ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
+                ln('Mar 28 09:46:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
+                ln('Mar 28 09:46:26 localhost terminusd[1842]: [drain-app] finished successfully'),
+                ln('Mar 28 09:46:27 localhost terminusd[1842]: [applyupdates] Launching command="/opt/terminusd/scripts/example-package-updates.sh" priority=300 user=root group=root'),
+                ln('Mar 28 09:57:32 localhost terminusd[1842]: [applyupdates] finished successfully'),
+                ln('Mar 28 09:57:33 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
+                ln('Mar 28 09:57:34 localhost terminusd[1842]: [final-sync] finished successfully'),
+                ln('Mar 28 09:57:34 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
+                ln(''),
+                ln('Notice: Updates have finished installing and the system will now reboot!'),
+                ln(''),
+                ln('Connection to localhost closed by remote host.', 'error'),
+                ln('client_loop: send disconnect: Broken pipe', 'error'),
+            ]
+        },
+    ];
+
+    var html = '';
+    var isTyping = false;
+
+    function render(extra) {
+        var idlePrompt = isTyping ? '' : '<span class="ok">' + esc(PROMPT) + '</span>';
+        pre.innerHTML = html + extra + idlePrompt + '<span class="hero-cursor"></span>';
+        wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function addOutputLine(text, cls) {
+        var e = esc(text);
+        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
+    }
+
+    function typeCmd(cmd, pause, done) {
+        isTyping = true;
+        html += '<span class="ok">' + esc(PROMPT) + '</span>';
+        var i = 0;
+        function tick() {
+            if (i < cmd.length) {
+                html += esc(cmd[i++]);
+                render('');
+                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
+            } else {
+                html += '\n';
+                isTyping = false;
+                render('');
+                setTimeout(done, pause);
+            }
+        }
+        render('');
+        setTimeout(tick, 90);
+    }
+
+    function showLines(lines, idx, delay, done) {
+        if (idx >= lines.length) {
+            html += '\n';
+            render('');
+            done();
+            return;
+        }
+        addOutputLine(lines[idx].text, lines[idx].cls);
+        render('');
+        setTimeout(function () { showLines(lines, idx + 1, delay, done); }, delay);
+    }
+
+    function runStep(i) {
+        if (i >= steps.length) {
+            setTimeout(function () {
+                html = '';
+                render('');
+                runStep(0);
+            }, END_PAUSE);
+            return;
+        }
+        var step = steps[i];
+        var pause = (step.cmdPause !== undefined) ? step.cmdPause : CMD_PAUSE;
+        var delay = (step.lineDelay !== undefined) ? step.lineDelay : LINE_DELAY;
+        typeCmd(step.cmd, pause, function () {
+            showLines(step.out, 0, delay, function () {
+                setTimeout(function () { runStep(i + 1); }, STEP_GAP);
+            });
+        });
+    }
+
+    render('');
+    setTimeout(function () { runStep(0); }, 600);
+}());
+
+(function () {
+    'use strict';
+
+    var pre  = document.getElementById('ordered-anim-pre');
+    var wrap = document.getElementById('ordered-anim-wrap');
+    if (!pre || !wrap) return;
+
+    var PROMPT = '# ';
+    var TYPE_MIN = 34;
+    var TYPE_JITTER = 22;
+    var LINE_DELAY = 66;
+    var CMD_PAUSE = 450;
+    var STEP_GAP = 6000;
+    var END_PAUSE = 95000;
+
+    var html = '';
+    var isTyping = false;
+    var showIdlePrompt = true;
+
+    function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function ln(text, cls) {
+        return { text: text || '', cls: cls || '' };
+    }
+
+    function render(extra) {
+        var idlePrompt = (!isTyping && showIdlePrompt) ? '<span class="ok">' + esc(PROMPT) + '</span>' : '';
+        pre.innerHTML = html + (extra || '') + idlePrompt + '<span class="hero-cursor"></span>';
+        wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function addLine(text, cls) {
+        var e = esc(text);
+        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
+    }
+
+    function typeCmd(cmd, done) {
+        isTyping = true;
+        html += '<span class="ok">' + esc(PROMPT) + '</span>';
+        var i = 0;
+
+        function tick() {
+            if (i < cmd.length) {
+                html += esc(cmd[i++]);
+                render('');
+                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
+            } else {
+                html += '\n';
+                isTyping = false;
+                render('');
+                setTimeout(done, CMD_PAUSE);
+            }
+        }
+
+        render('');
+        setTimeout(tick, 90);
+    }
+
+    function showLines(lines, idx, done) {
+        if (idx >= lines.length) {
+            render('');
+            done();
+            return;
+        }
+        addLine(lines[idx].text, lines[idx].cls);
+        render('');
+        setTimeout(function () { showLines(lines, idx + 1, done); }, LINE_DELAY);
+    }
+
+    function run() {
+        html = '';
+        isTyping = false;
+        showIdlePrompt = true;
+        render('');
+
+        typeCmd('reboot', function () {
+            addLine('Broadcast message from root@localhost:', 'warn');
+            addLine('  The system is going down for reboot NOW!', 'warn');
+            html += '\n';
+            render('');
+
+            setTimeout(function () {
+                typeCmd('tail -f /var/log/messages | grep terminusd', function () {
+                    showIdlePrompt = false;
+                    showLines([
+                        ln('Mar 28 11:05:02 localhost terminusd[1842]: [notifyusers] Launching command="/opt/terminusd/scripts/example-shutdown-notify.sh" priority=100 user=root group=root'),
+                        ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
+                        ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
+                        ln('Mar 28 11:05:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
+                        ln('Mar 28 11:06:15 localhost terminusd[1842]: [drain-app] finished successfully'),
+                        ln('Mar 28 11:06:16 localhost terminusd[1842]: [applyupdates] Launching command="/opt/terminusd/scripts/example-package-updates.sh" priority=300 user=root group=root'),
+                        ln('Mar 28 11:17:08 localhost terminusd[1842]: [applyupdates] finished successfully'),
+                        ln('Mar 28 11:17:09 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
+                        ln('Mar 28 11:17:15 localhost terminusd[1842]: [final-sync] finished successfully'),
+                        ln('Mar 28 11:17:16 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
+                        ln(''),
+                        ln('Connection to localhost closed by remote host.', 'error'),
+                        ln('client_loop: send disconnect: Broken pipe', 'error')
+                    ], 0, function () {
+                        showIdlePrompt = false;
+                        render('');
+                        setTimeout(run, END_PAUSE);
+                    });
+                });
+            }, STEP_GAP);
+        });
+    }
+
+    run();
+}());
+
+(function () {
+    'use strict';
+
+    var pre  = document.getElementById('guard-anim-pre');
+    var wrap = document.getElementById('guard-anim-wrap');
+    if (!pre || !wrap) return;
+
+    var PROMPT = '# ';
+    var TYPE_MIN = 34;
+    var TYPE_JITTER = 22;
+    var LINE_DELAY = 68;
+    var CMD_PAUSE = 420;
+    var STEP_GAP = 6000;
+    var LONG_TAIL_WAIT = 10000;
+    var END_PAUSE = 90000;
+
+    var html = '';
+    var isTyping = false;
+    var showIdlePrompt = true;
+
+    function esc(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function ln(text, cls) {
+        return { text: text || '', cls: cls || '' };
+    }
+
+    function render(extra) {
+        var idlePrompt = (!isTyping && showIdlePrompt) ? '<span class="ok">' + esc(PROMPT) + '</span>' : '';
+        pre.innerHTML = html + extra + idlePrompt + '<span class="hero-cursor"></span>';
+        wrap.scrollTop = wrap.scrollHeight;
+    }
+
+    function addLine(text, cls) {
+        var e = esc(text);
+        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
+    }
+
+    function typeCmd(cmd, done) {
+        isTyping = true;
+        html += '<span class="ok">' + esc(PROMPT) + '</span>';
+        var i = 0;
+
+        function tick() {
+            if (i < cmd.length) {
+                html += esc(cmd[i++]);
+                render('');
+                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
+            } else {
+                html += '\n';
+                isTyping = false;
+                render('');
+                setTimeout(done, CMD_PAUSE);
+            }
+        }
+
+        render('');
+        setTimeout(tick, 90);
+    }
+
+    function showLines(lines, idx, done) {
+        if (idx >= lines.length) {
+            render('');
+            done();
+            return;
+        }
+        addLine(lines[idx].text, lines[idx].cls);
+        render('');
+        setTimeout(function () { showLines(lines, idx + 1, done); }, LINE_DELAY);
+    }
+
+    function run() {
+        html = '';
+        showIdlePrompt = true;
+        render('');
+
+        typeCmd('reboot', function () {
+            addLine('Call to Reboot failed: Access denied', 'error');
+            html += '\n';
+            render('');
+
+            setTimeout(function () {
+                typeCmd('tail -f /var/log/messages | grep terminusd', function () {
+                    showIdlePrompt = false;
+                    showLines([
+                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persist mode: command="/opt/terminusd/scripts/example-persistent-shutdown-guard.sh" user=svcacct group=svcacct'),
+                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persistent user-defined guard started (pid 284776)'),
+                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Configuration: IP=192.168.1.225 interval=30s threshold=3 timeout=5s'),
+                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Persistent shutdown guard started for 192.168.1.225'),
+                        ln('Mar 28 13:04:36 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 1/3)', 'warn'),
+                        ln('Mar 28 13:04:41 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 2/3)', 'warn'),
+                        ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] WARNING: Failure threshold reached for 192.168.1.225; requesting shutdown disable', 'warn'),
+                        ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] DISABLED shutdowns (runtime)', 'warn')
+                    ], 0, function () {
+                        setTimeout(function () {
+                            showLines([
+                                ln('Mar 28 13:04:51 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 4)', 'warn'),
+                                ln('Mar 28 13:04:56 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 5)', 'warn'),
+                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: IP 192.168.1.225 is responding again after 5 consecutive failures'),
+                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: Connectivity restored; requesting shutdown enable'),
+                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] ENABLED shutdowns (runtime)', 'ok')
+                            ], 0, function () {
+                                showIdlePrompt = true;
+                                html += '\n';
+                                render('');
+
+                                setTimeout(function () {
+                                    typeCmd('reboot', function () {
+                                        showIdlePrompt = false;
+                                        addLine('Connection to localhost closed by remote host.', 'error');
+                                        addLine('client_loop: send disconnect: Broken pipe', 'error');
+                                        render('');
+
+                                        setTimeout(run, END_PAUSE);
+                                    });
+                                }, STEP_GAP);
+                            });
+                        }, LONG_TAIL_WAIT);
+                    });
+                });
+            }, STEP_GAP);
+        });
+    }
+
+    run();
+}());
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl disable --now terminusd.service >/dev/null 2>&1 || true
+        fi
+        rm -f /etc/terminus.d/notifyusers.conf
+        rm -f /etc/terminus.d/applyupdates.conf
+        rm -f /opt/terminusd/scripts/example-shutdown-notify.sh
+        rm -f /opt/terminusd/scripts/example-package-updates.sh
+        rm -f /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
+        rm -f /opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+        rmdir /etc/terminus.d >/dev/null 2>&1 || true
+        rmdir /opt/terminusd/scripts >/dev/null 2>&1 || true
+        rmdir /opt/terminusd >/dev/null 2>&1 || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

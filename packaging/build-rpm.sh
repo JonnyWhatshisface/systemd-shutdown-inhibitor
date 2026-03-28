@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build RPM and/or SRPM for system-update-inhibitor.
+# Build RPM and/or SRPM for terminusd.
 #
 # Usage: build-rpm.sh [--srpm-only] [VERSION]
 #
@@ -13,8 +13,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SPEC_SRC="${SCRIPT_DIR}/rpm/system-update-inhibitor.spec"
-PACKAGE="system-update-inhibitor"
+SPEC_SRC="${SCRIPT_DIR}/rpm/terminusd.spec"
+PACKAGE="terminusd"
 RPMBUILD_ROOT="${HOME}/rpmbuild"
 
 SRPM_ONLY=false
@@ -64,7 +64,7 @@ mkdir -p "${STAGE_DIR}"
     tar \
         --exclude='.git' \
         --exclude='./dist' \
-        --exclude='./system-update-inhibitor' \
+    	--exclude='./terminusd' \
         -cf - .
 ) | tar -xf - -C "${STAGE_DIR}"
 
