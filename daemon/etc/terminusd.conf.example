@@ -33,10 +33,10 @@
 #
 # shutdown_guard_enabled — must be set to true to activate the guard.
 #                          Default: false.
-shutdown_guard_enabled = true
+#shutdown_guard_enabled = false
 
 # shutdown_guard_command — path to the executable, with optional arguments.
-shutdown_guard_command = /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
+#shutdown_guard_command = /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
 
 # shutdown_guard_type — oneshot or persist.  Default: oneshot.
 #
