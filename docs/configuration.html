@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - Configuration</title>
+  <meta name="description" content="Core configuration keys for terminusd [main] section.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: configuration</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Core Config</div>
+      <h1>Configuring terminusd</h1>
+      <p>terminusd uses <code>/etc/terminusd.conf</code>, but supports drop-ins in <code>/etc/terminus.d</code> which overrides any section in the main configuration.</p>
+      <p>By default, terminusd ships with several example configurations and scripts, but everything is disabled until explicitly enabled.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card span-6">
+        <h2>Main Daemon Configuration</h2>
+        <ul>
+          <li><code>set_max_inhibit_delay</code>: when true, write max_inhibit_delay to InhibitDelayMaxSec in logind.conf if not set.</li>
+          <li><code>max_inhibit_delay</code>: desired inhibit ceiling in seconds.</li>
+          <li><code>restart_logind_after_set</code>: optionally restart logind to apply immediately.</li>
+        </ul>
+        <div class="callout">Restarting logind will terminate active login sessions, including your current one. Use with caution. Best for automated installs.</div>
+      </article>
+
+      <article class="card span-6">
+        <h2>Drop-in Configuration</h2>
+        <ul>
+          <li>Drop-ins are in ini-style format</li>
+          <li>Drop-ins override any values in any section</li>
+          <li>New section names append additional script actions</li>
+          <li>[main] is unique to terminusd core configuration and can be overridden, but cannot be used for scripts/commands</li>
+        </ul>
+      </article>
+
+      <article class="card span-12">
+        <h2>Example configuration with Shutdown Guard enabled</h2>
+        <p>Shutdown Guard is disabled by default. The following configuration can be placed in either <code>/etc/temrinusd.conf</code> or a drop-in in <code>/etc/terminus.d</code></p>
+        <pre><code>[main]
+set_max_inhibit_delay = true
+max_inhibit_delay = 3600
+shutdown_guard_enabled = true
+shutdown_guard_type = persist
+shutdown_guard_command = /usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh
+shutdown_guard_run_as_user = svcuser
+shutdown_guard_run_as_group = svcuser</code></pre>
+      </article>
+    </section>
+
+    <p class="footer">Next: detailed guard behavior in <a href="shutdown-guard.html">shutdown guard</a>.</p>
+  </main>
+</body>
+</html>

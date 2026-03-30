@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - Shutdown Guard</title>
+  <meta name="description" content="Shutdown guard modes and deterministic shutdown enable/disable controls.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: shutdown guard</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Shutdown Guard</div>
+      <h1>Complete control of when shutdowns can be performed.</h1>
+      <p>The Shutdown Guard works by executing your custom commands to determine whether system-wide shutdown, reboot, and halt actions will be disabled and enabled. Even from root. </p>
+      <p>It is meant to prevent accidental reboots by deterministically preventing them using your decisions about your environment.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card span-6">
+        <h2>oneshot Guard Scripts</h2>
+        <ul>
+          <li>Runs your command every <code>shutdown_guard_interval</code> seconds.</li>
+          <li>After <code>shutdown_guard_threshold</code> consecutive non-zero exits, system-wide shutdowns are disabled</li>
+          <li>When your guard command returns 0 again, system-wide shutdowns are re-enabled</li>
+        </ul>
+      </article>
+
+      <article class="card span-6">
+        <h2>persist mode</h2>
+        <ul>
+          <li>Starts your guard command and attaches to it to monitor STDIO.</li>
+          <li>If your guard script exits, Shutdown Guard will restart it automatically.</li>
+          <li>Your guard script controls enabling/disabled system-wide reboots by emitting directives to stdout.</li>
+        </ul>
+        <pre><code>shutdown_guard_disable_shutdown 1
+shutdown_guard_disable_shutdown 0</code></pre>
+      </article>
+
+      <article class="card span-12">
+        <h2>Guard keys in [main]</h2>
+        <ul>
+          <li><code>shutdown_guard_enabled</code></li>
+          <li><code>shutdown_guard_command</code></li>
+          <li><code>shutdown_guard_type</code> (<code>oneshot</code> or <code>persist</code>)</li>
+          <li><code>shutdown_guard_interval</code></li>
+          <li><code>shutdown_guard_threshold</code></li>
+          <li><code>shutdown_guard_run_as_user</code></li>
+          <li><code>shutdown_guard_run_as_group</code></li>
+          <li><code>shutdown_guard_run_env</code></li>
+        </ul>
+      </article>
+
+      <article class="card span-12">
+        <h2>Example persist mode Shutdown Guard</h2>
+        The included example persistent Shutdown Guard script monitors an IP address for availability, and disables shutdowns when it's not responding, enabling them again when it returns.
+        <div class="callout">Please note that the example script is pinging a specific IP address that may not exist on your network, and may result in terminusd disabling shutdowns/reboots on your system. You can use terminusctl to enable/disable both the guard and shutdowns if this occurs.</div>
+        <pre><code>[main]
+shutdown_guard_enabled = true
+shutdown_guard_type = persist
+shutdown_guard_command = /usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh
+shutdown_guard_run_as_user = root
+shutdown_guard_run_as_group = root</code></pre>
+      </article>
+    </section>
+
+    <p class="footer">Next: action sections in <a href="scripts.html">script actions</a>.</p>
+  </main>
+</body>
+</html>

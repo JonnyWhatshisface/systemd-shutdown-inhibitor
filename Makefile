@@ -1,10 +1,12 @@
 CC      = gcc
+CPPFLAGS = -Isrc/daemon
 CFLAGS  = -Wall -Wextra -O2 $(shell pkg-config --cflags libsystemd)
 LDFLAGS = $(shell pkg-config --libs libsystemd)
 
 TARGET   = terminusd
 CTL      = terminusctl
-SRCDIR   = daemon
+SRCDIR   = src/daemon
+CTLDIR   = src/ctl
 SRC      = \
 	$(SRCDIR)/inhibitor.c \
 	$(SRCDIR)/utils.c \
@@ -36,20 +38,24 @@ CONFFILE    = terminusd.conf
 DROPINDIR   = /etc/terminus.d
 DROPIN_CONFIGS = \
 	notifyusers.conf \
-	applyupdates.conf
-SERVICE_SRC = $(SRCDIR)/terminusd.service
+	applyupdates.conf \
+	terminateusersessions.conf
 SERVICENAME = terminusd.service
-CONFEXAMPLE_SRC = $(SRCDIR)/etc/$(CONFFILE).example
-MANPAGE_SRC = $(SRCDIR)/man/terminusd.8
+CONFEXAMPLE_SRC = config/$(CONFFILE).example
+MANPAGE_SRC = man/terminusd.8
 MANPAGE_DST = terminusd.8
-CTLMANPAGE_SRC = $(SRCDIR)/man/terminusctl.8
+CTLMANPAGE_SRC = man/terminusctl.8
 CTLMANPAGE_DST = terminusctl.8
-EXAMPLESDIR = /opt/terminusd/scripts
+EXAMPLE_SOURCE_DIR = examples/scripts
+EXAMPLESDIR = /usr/libexec/terminusd/examples
 EXAMPLE_SCRIPTS = \
 	example-persistent-shutdown-guard.sh \
 	example-oneshot-shutdown-guard.sh \
 	example-package-updates.sh \
-	example-shutdown-notify.sh
+	example-shutdown-notify.sh \
+	example-terminate-user-sessions.sh
+DROPIN_SOURCE_DIR = config/dropins
+SERVICE_SRC = systemd/terminusd.service
 
 .PHONY: all clean install uninstall test test-build test-config test-test-mode test-terminusctl
 
@@ -58,21 +64,21 @@ all: $(TARGET)
 all: $(CTL)
 
 $(TARGET): $(SRC) $(SRCDIR)/inhibitor.h $(SRCDIR)/test.h
-	$(CC) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(SRC) $(LDFLAGS)
 
-$(CTL): $(SRCDIR)/terminusctl.c $(SRCDIR)/inhibitor.h
-	$(CC) $(CFLAGS) -o $@ $(SRCDIR)/terminusctl.c $(LDFLAGS)
+$(CTL): $(CTLDIR)/terminusctl.c $(SRCDIR)/inhibitor.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(CTLDIR)/terminusctl.c $(LDFLAGS)
 
 test-build: $(TARGET) $(CTL) $(TEST_BIN) $(TEST_MODE_BIN) $(TEST_TERMINUSCTL_BIN)
 
 $(TEST_BIN): $(TESTDIR)/test_inhibitor_config.c $(TEST_SRC) $(SRCDIR)/inhibitor.h $(SRCDIR)/test.h
-	$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test_inhibitor_config.c $(TEST_SRC) $(LDFLAGS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TESTDIR)/test_inhibitor_config.c $(TEST_SRC) $(LDFLAGS)
 
 $(TEST_MODE_BIN): $(TESTDIR)/test_inhibitor_test_mode.c $(TARGET)
-	$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test_inhibitor_test_mode.c $(LDFLAGS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TESTDIR)/test_inhibitor_test_mode.c $(LDFLAGS)
 
-$(TEST_TERMINUSCTL_BIN): $(TESTDIR)/test_terminusctl_cli.c $(SRCDIR)/terminusctl.c $(SRCDIR)/inhibitor.h
-	$(CC) $(CFLAGS) -o $@ $(TESTDIR)/test_terminusctl_cli.c $(LDFLAGS)
+$(TEST_TERMINUSCTL_BIN): $(TESTDIR)/test_terminusctl_cli.c $(CTLDIR)/terminusctl.c $(SRCDIR)/inhibitor.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(TESTDIR)/test_terminusctl_cli.c $(LDFLAGS)
 
 test: test-build
 	./$(TEST_BIN)
@@ -112,12 +118,12 @@ install: $(TARGET) $(CTL)
 		echo "Config $(DESTDIR)$(CONFDIR)/$(CONFFILE) already exists, not overwriting"; \
 	fi
 	@for d in $(DROPIN_CONFIGS); do \
-		install -Dm644 $(SRCDIR)/etc/terminus.d/$$d $(DESTDIR)$(DROPINDIR)/$$d; \
+		install -Dm644 $(DROPIN_SOURCE_DIR)/$$d $(DESTDIR)$(DROPINDIR)/$$d; \
 		echo "Installed drop-in config to $(DESTDIR)$(DROPINDIR)/$$d"; \
 	done
 	@for s in $(EXAMPLE_SCRIPTS); do \
 		if [ ! -f $(DESTDIR)$(EXAMPLESDIR)/$$s ]; then \
-			install -Dm755 opt/terminusd/scripts/$$s $(DESTDIR)$(EXAMPLESDIR)/$$s; \
+			install -Dm755 $(EXAMPLE_SOURCE_DIR)/$$s $(DESTDIR)$(EXAMPLESDIR)/$$s; \
 			echo "Installed example script to $(DESTDIR)$(EXAMPLESDIR)/$$s"; \
 		else \
 			echo "Script $(DESTDIR)$(EXAMPLESDIR)/$$s already exists, not overwriting"; \
@@ -148,7 +154,7 @@ uninstall:
 	done
 	@rmdir $(DESTDIR)$(DROPINDIR) >/dev/null 2>&1 || true
 	@rmdir $(DESTDIR)$(EXAMPLESDIR) >/dev/null 2>&1 || true
-	@rmdir $(DESTDIR)/opt/terminusd >/dev/null 2>&1 || true
+	@rmdir $(DESTDIR)/usr/libexec/terminusd >/dev/null 2>&1 || true
 
 clean:
 	rm -f $(TARGET)

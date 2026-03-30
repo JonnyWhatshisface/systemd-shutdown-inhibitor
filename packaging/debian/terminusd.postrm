@@ -8,13 +8,15 @@ case "$1" in
         fi
         rm -f /etc/terminus.d/notifyusers.conf
         rm -f /etc/terminus.d/applyupdates.conf
-        rm -f /opt/terminusd/scripts/example-shutdown-notify.sh
-        rm -f /opt/terminusd/scripts/example-package-updates.sh
-        rm -f /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
-        rm -f /opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+        rm -f /etc/terminus.d/terminateusersessions.conf
+        rm -f /usr/libexec/terminusd/examples/example-shutdown-notify.sh
+        rm -f /usr/libexec/terminusd/examples/example-package-updates.sh
+        rm -f /usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh
+        rm -f /usr/libexec/terminusd/examples/example-oneshot-shutdown-guard.sh
+        rm -f /usr/libexec/terminusd/examples/example-terminate-user-sessions.sh
         rmdir /etc/terminus.d >/dev/null 2>&1 || true
-        rmdir /opt/terminusd/scripts >/dev/null 2>&1 || true
-        rmdir /opt/terminusd >/dev/null 2>&1 || true
+        rmdir /usr/libexec/terminusd/examples >/dev/null 2>&1 || true
+        rmdir /usr/libexec/terminusd >/dev/null 2>&1 || true
         ;;
 esac
 

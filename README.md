@@ -92,7 +92,7 @@ This installs:
 - man pages to `/usr/share/man/man8`
 - default config to `/etc/terminusd.conf`
 - drop-in examples to `/etc/terminus.d`
-- script examples to `/opt/terminusd/scripts`
+- script examples to `/usr/libexec/terminusd/examples`
 
 ### Enable and start
 
@@ -132,14 +132,14 @@ max_inhibit_delay = 2700
 # priority groups and let the reboot happen
 # immediately after completion of the group.
 [notifyusers]
-command = /opt/terminusd/scripts/example-shutdown-notify.sh
+command = /usr/libexec/terminusd/examples/example-shutdown-notify.sh
 priority = 100
 [stop_certain_services]
 command = /usr/local/bin/svc-stop-on-shutdown.sh --force
 priority = 100
 critical = true
 [applyupdates]
-command = /opt/terminusd/scripts/example-package-updates.sh
+command = /usr/libexec/terminusd/examples/example-package-updates.sh
 priority = 1000
 critical = true
 [firmware_updates]
@@ -221,7 +221,7 @@ Options:
 
 This gives the ultimate flexibility for making decisions on when and why to disable reboots on a system, giving total control to do so based on your environments needs that go beyond just user permission. **Avoid embarrassing outages from accidental reboots during reduced capacity in a BCP event.**
 
-Example guard scripts are installed under `/opt/terminusd/scripts`.
+Example guard scripts are installed under `/usr/libexec/terminusd/examples`.
 
 ## Safety model
 

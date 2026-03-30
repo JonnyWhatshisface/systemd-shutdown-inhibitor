@@ -6,7 +6,7 @@ export DH_VERBOSE = 1
 
 override_dh_auto_install:
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/terminusd \
-		EXAMPLESDIR=/opt/terminusd/scripts
+		EXAMPLESDIR=/usr/libexec/terminusd/examples
 
 override_dh_installsystemd:
 	dh_installsystemd terminusd.service

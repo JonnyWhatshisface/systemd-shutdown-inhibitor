@@ -1,2 +1,3 @@
-daemon/etc/terminus.d/notifyusers.conf etc/terminus.d/
-daemon/etc/terminus.d/applyupdates.conf etc/terminus.d/
+config/dropins/notifyusers.conf etc/terminus.d/
+config/dropins/applyupdates.conf etc/terminus.d/
+config/dropins/terminateusersessions.conf etc/terminus.d/

@@ -1,7 +1,7 @@
 Name:           terminusd
 Version:        1.0.0
 Release:        1%{?dist}
-Summary:        Systemd shutdown inhibitor daemon for running tasks before shutdown
+Summary:        Systemd shutdown inhibitor daemon for complete shutdown control
 
 License:        GPL-3.0-or-later
 URL:            https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor
@@ -33,43 +33,48 @@ are all configured in /etc/terminusd.conf.
 make CFLAGS="%{optflags}"
 
 %install
-if [ -f daemon/terminusd.service ]; then
-	SERVICE_FILE=daemon/terminusd.service
+if [ -f systemd/terminusd.service ]; then
+	SERVICE_FILE=systemd/terminusd.service
 else
 	SERVICE_FILE=terminusd.service
 fi
-if [ -f daemon/etc/terminusd.conf.example ]; then
-	CONF_EXAMPLE=daemon/etc/terminusd.conf.example
+if [ -f config/terminusd.conf.example ]; then
+	CONF_EXAMPLE=config/terminusd.conf.example
 else
 	CONF_EXAMPLE=terminusd.conf.example
 fi
-if [ -f opt/terminusd/scripts/example-package-updates.sh ]; then
-	EXAMPLE_UPDATE_SCRIPT=opt/terminusd/scripts/example-package-updates.sh
+if [ -f examples/scripts/example-package-updates.sh ]; then
+	EXAMPLE_UPDATE_SCRIPT=examples/scripts/example-package-updates.sh
 else
 	EXAMPLE_UPDATE_SCRIPT=example-package-updates.sh
 fi
-if [ -f opt/terminusd/scripts/example-shutdown-notify.sh ]; then
-	EXAMPLE_NOTIFY_SCRIPT=opt/terminusd/scripts/example-shutdown-notify.sh
+if [ -f examples/scripts/example-shutdown-notify.sh ]; then
+	EXAMPLE_NOTIFY_SCRIPT=examples/scripts/example-shutdown-notify.sh
 else
 	EXAMPLE_NOTIFY_SCRIPT=example-shutdown-notify.sh
 fi
-if [ -f opt/terminusd/scripts/example-persistent-shutdown-guard.sh ]; then
-	EXAMPLE_PERSIST_GUARD_SCRIPT=opt/terminusd/scripts/example-persistent-shutdown-guard.sh
+if [ -f examples/scripts/example-persistent-shutdown-guard.sh ]; then
+	EXAMPLE_PERSIST_GUARD_SCRIPT=examples/scripts/example-persistent-shutdown-guard.sh
 else
 	EXAMPLE_PERSIST_GUARD_SCRIPT=example-persistent-shutdown-guard.sh
 fi
-if [ -f opt/terminusd/scripts/example-oneshot-shutdown-guard.sh ]; then
-	EXAMPLE_ONESHOT_GUARD_SCRIPT=opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+if [ -f examples/scripts/example-oneshot-shutdown-guard.sh ]; then
+	EXAMPLE_ONESHOT_GUARD_SCRIPT=examples/scripts/example-oneshot-shutdown-guard.sh
 else
 	EXAMPLE_ONESHOT_GUARD_SCRIPT=example-oneshot-shutdown-guard.sh
 fi
-if [ -f daemon/man/terminusd.8 ]; then
-	MANPAGE_FILE=daemon/man/terminusd.8
+if [ -f examples/scripts/example-terminate-user-sessions.sh ]; then
+	EXAMPLE_TERMINATE_SESSIONS_SCRIPT=examples/scripts/example-terminate-user-sessions.sh
+else
+	EXAMPLE_TERMINATE_SESSIONS_SCRIPT=example-terminate-user-sessions.sh
+fi
+if [ -f man/terminusd.8 ]; then
+	MANPAGE_FILE=man/terminusd.8
 else
 	MANPAGE_FILE=terminusd.8
 fi
-if [ -f daemon/man/terminusctl.8 ]; then
-	CTLMANPAGE_FILE=daemon/man/terminusctl.8
+if [ -f man/terminusctl.8 ]; then
+	CTLMANPAGE_FILE=man/terminusctl.8
 else
 	CTLMANPAGE_FILE=terminusctl.8
 fi
@@ -83,18 +88,22 @@ install -Dpm0644 "$SERVICE_FILE" \
 install -Dpm0644 "$CONF_EXAMPLE" \
 	%{buildroot}%{_sysconfdir}/terminusd.conf
 install -d %{buildroot}%{_sysconfdir}/terminus.d
-install -Dpm0644 daemon/etc/terminus.d/notifyusers.conf \
+install -Dpm0644 config/dropins/notifyusers.conf \
 	%{buildroot}%{_sysconfdir}/terminus.d/notifyusers.conf
-install -Dpm0644 daemon/etc/terminus.d/applyupdates.conf \
+install -Dpm0644 config/dropins/applyupdates.conf \
 	%{buildroot}%{_sysconfdir}/terminus.d/applyupdates.conf
+install -Dpm0644 config/dropins/terminateusersessions.conf \
+	%{buildroot}%{_sysconfdir}/terminus.d/terminateusersessions.conf
 install -Dpm0755 "$EXAMPLE_NOTIFY_SCRIPT" \
-	%{buildroot}/opt/terminusd/scripts/example-shutdown-notify.sh
+	%{buildroot}%{_libexecdir}/terminusd/examples/example-shutdown-notify.sh
 install -Dpm0755 "$EXAMPLE_UPDATE_SCRIPT" \
-	%{buildroot}/opt/terminusd/scripts/example-package-updates.sh
+	%{buildroot}%{_libexecdir}/terminusd/examples/example-package-updates.sh
 install -Dpm0755 "$EXAMPLE_PERSIST_GUARD_SCRIPT" \
-	%{buildroot}/opt/terminusd/scripts/example-persistent-shutdown-guard.sh
+	%{buildroot}%{_libexecdir}/terminusd/examples/example-persistent-shutdown-guard.sh
 install -Dpm0755 "$EXAMPLE_ONESHOT_GUARD_SCRIPT" \
-	%{buildroot}/opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+	%{buildroot}%{_libexecdir}/terminusd/examples/example-oneshot-shutdown-guard.sh
+install -Dpm0755 "$EXAMPLE_TERMINATE_SESSIONS_SCRIPT" \
+	%{buildroot}%{_libexecdir}/terminusd/examples/example-terminate-user-sessions.sh
 install -Dpm0644 "$MANPAGE_FILE" \
 	%{buildroot}%{_mandir}/man8/terminusd.8
 install -Dpm0644 "$CTLMANPAGE_FILE" \
@@ -115,30 +124,36 @@ fi
 if [ $1 -eq 0 ]; then
 	rm -f %{_sysconfdir}/terminus.d/notifyusers.conf
 	rm -f %{_sysconfdir}/terminus.d/applyupdates.conf
-	rm -f /opt/terminusd/scripts/example-shutdown-notify.sh
-	rm -f /opt/terminusd/scripts/example-package-updates.sh
-	rm -f /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
-	rm -f /opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+	rm -f %{_sysconfdir}/terminus.d/terminateusersessions.conf
+	rm -f %{_libexecdir}/terminusd/examples/example-shutdown-notify.sh
+	rm -f %{_libexecdir}/terminusd/examples/example-package-updates.sh
+	rm -f %{_libexecdir}/terminusd/examples/example-persistent-shutdown-guard.sh
+	rm -f %{_libexecdir}/terminusd/examples/example-oneshot-shutdown-guard.sh
+	rm -f %{_libexecdir}/terminusd/examples/example-terminate-user-sessions.sh
 	rmdir %{_sysconfdir}/terminus.d >/dev/null 2>&1 || :
-	rmdir /opt/terminusd/scripts >/dev/null 2>&1 || :
-	rmdir /opt/terminusd >/dev/null 2>&1 || :
+	rmdir %{_libexecdir}/terminusd/examples >/dev/null 2>&1 || :
+	rmdir %{_libexecdir}/terminusd >/dev/null 2>&1 || :
 fi
 
 %files
 %license LICENSE
 %doc README.md
-/opt/terminusd/scripts/example-shutdown-notify.sh
-/opt/terminusd/scripts/example-package-updates.sh
-/opt/terminusd/scripts/example-persistent-shutdown-guard.sh
-/opt/terminusd/scripts/example-oneshot-shutdown-guard.sh
+%{_libexecdir}/terminusd/examples/example-shutdown-notify.sh
+%{_libexecdir}/terminusd/examples/example-package-updates.sh
+%{_libexecdir}/terminusd/examples/example-persistent-shutdown-guard.sh
+%{_libexecdir}/terminusd/examples/example-oneshot-shutdown-guard.sh
+%{_libexecdir}/terminusd/examples/example-terminate-user-sessions.sh
 %{_sbindir}/terminusd
 %{_sbindir}/terminusctl
 %{_unitdir}/terminusd.service
 %{_mandir}/man8/terminusd.8*
 %{_mandir}/man8/terminusctl.8*
+%dir %{_libexecdir}/terminusd
+%dir %{_libexecdir}/terminusd/examples
 %config(noreplace) %{_sysconfdir}/terminusd.conf
 %config %{_sysconfdir}/terminus.d/notifyusers.conf
 %config %{_sysconfdir}/terminus.d/applyupdates.conf
+%config %{_sysconfdir}/terminus.d/terminateusersessions.conf
 %dir %{_sysconfdir}/terminus.d
 
 %changelog

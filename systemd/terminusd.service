@@ -1,12 +1,11 @@
 [Unit]
-Description=Shutdown Inhibitor Example
+Description=terminusd
 After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/inhibitor.py
+ExecStart=/usr/sbin/terminusd --foreground
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-

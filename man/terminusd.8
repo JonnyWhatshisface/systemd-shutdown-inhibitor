@@ -1,0 +1,401 @@
+.TH TERMINUSD 8 "March 2026" "terminusd" "System Administration"
+.SH NAME
+terminusd \- shutdown control for Linux
+.SH SYNOPSIS
+.B terminusd
+.RI [ \-c " config_path" ]
+.SH DESCRIPTION
+.B terminusd
+is a lightweight daemon that gives complete control over system shutdowns,
+reboots and poweroffs.
+It registers a
+.I delay
+inhibitor lock with
+.BR systemd-logind (8)
+at startup and listens for the
+.B PrepareForShutdown
+signal on D-Bus.
+When that signal fires the system is held in an active pre-shutdown state
+\(em where
+.BR systemctl (1)
+commands still work, services can be started and stopped, and packages can
+be installed \(em while
+.B terminusd
+executes the configured actions.
+Only after all actions complete (or a critical failure aborts the run)
+is the inhibitor lock released, allowing systemd to continue with
+poweroff or reboot.
+.PP
+.B Why a delay inhibitor rather than a block inhibitor?
+Block inhibitors are ignored when shutdown or reboot commands are issued
+by root.
+Delay inhibitors are honoured by all callers but expire after
+.B InhibitDelayMaxSec
+seconds (see
+.BR logind.conf (5)),
+providing a safe upper bound that prevents the machine from being held
+indefinitely should the configured actions stall.
+The inhibitor releases as soon as the actions finish, so the shutdown
+window is no longer than necessary.
+.PP
+.B terminusd
+supports two complementary features:
+.TP
+.I Ordered shutdown actions
+Scripts, binaries, or commands are assigned a numeric
+.B priority
+and executed in ascending order.
+Scripts sharing the same priority run in parallel, allowing faster
+shutdown windows.
+Any action can be marked
+.B critical\c
+; if a critical action exits non-zero, all remaining priority groups are
+skipped, the inhibitor is released and the shutdown proceeds, preventing
+half-finished maintenance states.
+.TP
+.I Shutdown guard
+An optional always-running guard process can dynamically mask or unmask
+the systemd shutdown targets
+.RB ( shutdown.target ,
+.BR reboot.target ,
+.BR poweroff.target ,
+.BR kexec.target ,
+.BR halt.target )
+based on runtime conditions \(em even against root.
+This is useful for preventing accidental reboots during BCP or
+degraded HA-cluster states.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config " " \fIPATH\fP
+Path to the configuration file.
+If omitted,
+.I /etc/terminusd.conf
+is used.
+.SH CONFIGURATION
+.B terminusd
+uses INI-format configuration files.
+The primary file is:
+.TP
+.I /etc/terminusd.conf
+and optional drop-in files may be placed in:
+.TP
+.I /etc/terminus.d/
+Drop-ins are loaded after the primary file in lexical filename order.
+For
+.B [main]
+keys the last value seen wins.
+For script sections, a drop-in section whose name matches an existing
+section overrides the values in that section; sections with new names add
+new scripts.
+This design integrates cleanly with configuration management tools.
+.SS "[main] section"
+.TP
+.B set_max_inhibit_delay
+Boolean (true/false, yes/no, 1/0).
+When true, the daemon writes the value of
+.B max_inhibit_delay
+into
+.B InhibitDelayMaxSec
+in
+.IR /etc/systemd/logind.conf .
+Default: false.
+.TP
+.B max_inhibit_delay
+Desired
+.B InhibitDelayMaxSec
+value in seconds.
+Choose a value large enough to cover the total expected runtime of all
+configured scripts.
+This is the hard safety ceiling; the inhibitor releases sooner if the
+scripts finish earlier.
+Only meaningful when
+.B set_max_inhibit_delay = true\c
+\&.
+.TP
+.B restart_logind_after_set
+Boolean.
+When true, the daemon restarts
+.B systemd-logind.service
+immediately after updating
+.I logind.conf
+so the new
+.B InhibitDelayMaxSec
+value takes effect without a reboot.
+.B Warning:
+restarting logind terminates all active login sessions.
+Default: false.
+.SS "Shutdown guard keys (in [main])"
+.TP
+.B shutdown_guard_enabled
+Boolean.
+Set to true to activate the shutdown guard subsystem.
+Default: false.
+.TP
+.B shutdown_guard_command
+Path to the guard executable, optionally followed by arguments.
+This program is responsible for dynamically enabling or disabling
+shutdowns based on runtime conditions.
+.TP
+.B shutdown_guard_type
+.RS
+.TP
+.B oneshot
+(default)
+The guard command is executed every
+.B shutdown_guard_interval
+seconds.
+After
+.B shutdown_guard_threshold
+consecutive non-zero exits the shutdown targets are masked.
+They are unmasked the first time the command exits zero.
+.TP
+.B persist
+The guard command is forked once and kept running indefinitely.
+If it exits for any reason it is restarted immediately.
+The process controls masking by writing directives to its stdout:
+.RS
+.PP
+.EX
+shutdown_guard_disable_shutdown 1   # disable shutdowns
+shutdown_guard_disable_shutdown 0   # re-enable shutdowns
+.EE
+.PP
+These directives may be emitted as many times as needed;
+all other output is forwarded to syslog.
+.RE
+.RE
+.TP
+.B shutdown_guard_interval
+Seconds between successive oneshot guard runs.
+Default: 30.
+Ignored in persist mode.
+.TP
+.B shutdown_guard_threshold
+Number of consecutive non-zero exits from the guard command before
+shutdown targets are masked in oneshot mode.
+Default: 1.
+Ignored in persist mode.
+.TP
+.B shutdown_guard_run_as_user
+Drop privileges to this user before executing the guard process.
+Optional.
+.TP
+.B shutdown_guard_run_as_group
+Drop privileges to this group before executing the guard process.
+Optional.
+.TP
+.B shutdown_guard_run_env
+Path to a
+.I KEY=VALUE
+environment file sourced into the guard process environment.
+Optional.
+.SS "Script sections"
+Every section name other than
+.B [main]
+defines a shutdown action.
+The section name is used as a label in log messages.
+.TP
+.B command
+Absolute path to an executable script or binary, optionally followed by
+arguments.
+Required.
+.TP
+.B priority
+Unsigned integer.
+Actions run in ascending order; actions with equal priority run in
+parallel.
+Defaults to 1000.
+.TP
+.B user
+Drop privileges to this user before exec.
+Optional.
+.TP
+.B group
+Drop privileges to this group before exec.
+Optional.
+.TP
+.B env
+Path to a
+.I KEY=VALUE
+environment file.
+If omitted the action inherits the daemon's environment.
+Optional.
+.TP
+.B critical
+Boolean.
+If true and this action exits non-zero, all remaining priority groups are
+skipped, the inhibitor is released and the shutdown proceeds immediately.
+This prevents half-finished maintenance states.
+Default: false.
+.TP
+.B enabled
+Boolean.
+If false this section is completely ignored and not loaded.
+Default: true.
+.SH "SHUTDOWN SEQUENCE"
+.IP "1." 4
+.B terminusd
+starts and registers a delay inhibitor lock with
+.BR systemd-logind (8).
+.IP "2." 4
+The daemon monitors D-Bus for the
+.B PrepareForShutdown
+signal.
+If the shutdown guard is enabled, the guard process is started
+concurrently and begins managing shutdown-target masking.
+.IP "3." 4
+When
+.B PrepareForShutdown
+fires, the daemon executes configured actions in ascending priority order.
+Actions within the same priority group run in parallel.
+.IP "4." 4
+If a critical action exits non-zero, remaining groups are aborted.
+.IP "5." 4
+After the run completes (or is aborted), the inhibitor lock is released
+and the system continues with poweroff or reboot.
+.SH "LOGIND DELAY TIMEOUT"
+The
+.B InhibitDelayMaxSec
+setting in
+.BR logind.conf (5)
+is a hard upper limit on how long any delay inhibitor can hold.
+If the configured actions do not finish within this window the inhibitor
+is released forcibly and the shutdown proceeds.
+Choose a value that covers your longest expected shutdown action with
+some margin.
+For environments that apply firmware updates or run long package upgrades
+a value of 45 minutes or more is recommended.
+.SH FILES
+.TP
+.I /etc/terminusd.conf
+Primary configuration file.
+.TP
+.I /etc/terminus.d/
+Drop-in configuration directory.
+Files in this directory are loaded in lexical order after the primary
+configuration file.
+.TP
+.I /usr/libexec/terminusd/examples/
+Directory of example scripts installed with the package:
+.RS
+.TP
+.I example-shutdown-notify.sh
+Notifies logged-in users of the pending shutdown and blocks new logins.
+.TP
+.I example-package-updates.sh
+Runs package upgrades via
+.B apt
+or
+.B dnf
+while systemd is still fully functional.
+.TP
+.I example-persistent-shutdown-guard.sh
+Example persist-mode guard: monitors remote IP reachability and emits
+enable/disable directives to terminusd.
+.TP
+.I example-oneshot-shutdown-guard.sh
+Example oneshot-mode guard: exits non-zero when a remote IP is
+unreachable, triggering masking after the configured threshold.
+.RE
+.TP
+.I /usr/lib/systemd/system/terminusd.service
+Systemd service unit file.
+.SH EXAMPLES
+.SS "Basic ordered shutdown actions"
+Run a user-notification script first, then apply package updates.
+The update step is marked critical so a failure stops further execution.
+.PP
+.RS
+.EX
+[main]
+set_max_inhibit_delay = true
+max_inhibit_delay = 2700
+
+[notifyusers]
+command = /usr/libexec/terminusd/examples/example-shutdown-notify.sh
+priority = 100
+user = root
+
+[applyupdates]
+command = /usr/libexec/terminusd/examples/example-package-updates.sh
+priority = 200
+critical = true
+.EE
+.RE
+.SS "Shutdown guard — persist mode"
+Prevent shutdowns while a critical upstream host is unreachable.
+The guard process sends enable/disable directives via stdout.
+.PP
+.RS
+.EX
+[main]
+shutdown_guard_enabled = true
+shutdown_guard_type = persist
+shutdown_guard_command = /usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh
+shutdown_guard_run_as_user = svcacct
+shutdown_guard_run_as_group = svcacct
+.EE
+.RE
+.PP
+When the upstream host becomes unreachable the guard emits:
+.PP
+.RS
+.EX
+shutdown_guard_disable_shutdown 1
+.EE
+.RE
+.PP
+All subsequent
+.BR reboot (8),
+.BR shutdown (8),
+and
+.RB ` "systemctl reboot" '
+commands return
+.B "Access denied"
+until the guard re-emits:
+.PP
+.RS
+.EX
+shutdown_guard_disable_shutdown 0
+.EE
+.RE
+.SS "Drop-in configuration"
+Adding a new script via a drop-in (suitable for configuration management):
+.PP
+.RS
+.EX
+# /etc/terminus.d/50-cluster-failover.conf
+[clusterfailover]
+command = /usr/local/bin/failover-primary.sh
+priority = 100
+critical = true
+user = clusteradm
+.EE
+.RE
+.SH "USE CASES"
+.TP
+.B Installing packages safely on reboot
+.B terminusd
+holds the inhibitor while the system is still in a fully operational
+state, meaning
+.BR systemctl (1)
+commands invoked by package pre/post scripts succeed.
+This avoids the dual-reboot mechanic introduced by the systemd
+system-update mechanism.
+.TP
+.B Cluster failover and preparation
+Configure coordinated failover scripts that run in defined sequence,
+ensuring workloads move cleanly to other nodes before the machine goes
+down.
+.TP
+.B Preventing accidental reboots
+Enable the shutdown guard during BCP events, degraded HA states, or
+critical maintenance windows.
+Even root-issued reboot commands are denied while the guard holds
+shutdowns disabled.
+.SH "SEE ALSO"
+.BR systemd-logind (8),
+.BR logind.conf (5),
+.BR systemctl (1),
+.BR reboot (8),
+.BR shutdown (8)

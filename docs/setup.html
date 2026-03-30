@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - Setup</title>
+  <meta name="description" content="Setup guide for installing and starting terminusd.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: setup</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Getting Started</div>
+      <h1>Install, enable and verify terminusd</h1>
+      <p>terminusd is available either by source or packages for Fedora, Red Hat and Debian.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card span-12">
+        <h2>Package Repositories</h2>
+        <p>Debian and RPM packages are available on the Github in the releases.<br><br>Repositories are on the way.</p>
+      </article>
+      <article class="card span-12">
+        <h2>Install from source/h2>
+        <pre><code>make
+sudo make install
+sudo terminusctl start
+[configure] Configure <code>/etc/terminusd.conf</code> and <code>/etc/terminus.d/*.conf</code> drop-ins as needed
+[optional] terminusctl --set-logind-inhibitor-delay</code></pre>
+      </article>
+
+      <article class="card span-12">
+        <h2>Installed file layout</h2>
+        <ul>
+          <li><code>/usr/sbin/terminusd</code></li>
+          <li><code>/usr/sbin/terminusctl</code></li>
+          <li><code>/usr/lib/systemd/system/terminusd.service</code></li>
+          <li><code>/etc/terminusd.conf</code></li>
+          <li><code>/etc/terminus.d</code> drop-in directory</li>
+          <li><code>/usr/libexec/terminusd/examples</code> example scripts</li>
+          <li><code>/usr/share/man/man8/terminusd.8</code></li>
+          <li><code>/usr/share/man/man8/terminusctl.8</code></li>
+        </ul>
+      </article>
+
+      <article class="card span-8">
+        <h2>Initial validation</h2>
+        <pre><code>sudo terminusctl status</code></pre>
+        <div class="note">Terminusd status should show the current running configuration.</div>
+        <div class="callout">Residual configurations may be present if previously installed.</div>
+      </article>
+
+      <article class="card span-4">
+        <h2>Manual pages</h2>
+        <pre><code>man terminusd
+man terminusctl</code></pre>
+      </article>
+    </section>
+
+    <p class="footer">Next: tune core behavior in <a href="configuration.html">configuration</a>.</p>
+  </main>
+</body>
+</html>

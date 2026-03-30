@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - terminusctl</title>
+  <meta name="description" content="terminusctl command reference for runtime daemon control.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: terminusctl</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Dynamic Control CLI</div>
+      <h1>Control terminusd from the CLI.</h1>
+      <p><code>terminusctl</code> allows you to control terminusd, reconfiguring it dynamically or overriding its configuration.</p>
+      <div class="callout">terminusctl requires root privileges to talk to the daemon.</div>
+    </section>
+
+    <section class="grid">
+      <article class="card span-6">
+        <h2>Service commands</h2>
+        <pre><code>terminusctl start
+terminusctl stop</code></pre>
+<p>Start and stop <code>terminusd</code>.</p>
+      </article>
+
+      <article class="card span-6">
+        <h2>Runtime state and reload</h2>
+        <pre><code>terminusctl status
+terminusctl reload-config</code></pre>
+<p>Check the current status of <code>terminusd</code> and reload its configuration and shutdown actions without restarting the daemon.</p>
+      </article>
+
+      <article class="card span-6">
+        <h2>Shutdown guard control</h2>
+        <pre><code>terminusctl shutdown-guard enable
+terminusctl shutdown-guard disable</code></pre>
+<p>If your Shutdown Guard script has erroneously disabled shutdowns, or you're developing it and don't want to restart the daemon - <code>terminusctl</code> allows you to dynamically start and stop the configured <code>Shutdown Guard</code>.</p>
+      </article>
+
+      <article class="card span-6">
+        <h2>Shutdown command control</h2>
+        <pre><code>terminusctl shutdown-commands enable
+terminusctl shutdown-commands disable</code></pre>
+<p>terminusctl can use <code>Shutdown Guard</code> to enable or disable system-wide shutdowns, but they can also be disabled and enabled through temrinusctl.</p>
+      </article>
+
+      <article class="card span-12">
+        <h2>Reboot and poweroff requests</h2>
+        <pre><code>terminusctl --force system-reboot
+terminusctl --force system-shutdown
+terminusctl --force --skip-scripts system-reboot
+terminusctl --force --skip-scripts system-shutdown</code></pre>
+        <p>To optionally skip overriding the disabled shutdown state of the system, you can use temrinusctl to reboot or shutdown.</p>
+        <p>Without <code>--force</code>, reboot and shutdown commands prompt for confirmation.</p>
+      </article>
+
+      <article class="card span-12">
+        <h2>One-shot logind delay sync</h2>
+        <pre><code>terminusctl --set-logind-inhibitor-delay</code></pre>
+        <p>terminusd requires an inibitor delay timeout be configured in <code>/etc/systemd/logind.conf</code>. This command allows you to quickly set it from <code>terminusctl</code> without using the automatic setting from the core configuration.</p>
+        <div class="callout">This will require a restart of <code>logind</code> or a system reboot.</div>
+
+      </article>
+
+      <article class="card span-12">
+        <h2>Help</h2>
+        <pre><code>terminusctl --help</code></pre>
+      </article>
+    </section>
+
+    <p class="footer">For complete details, also see <code>man 8 terminusctl</code>.</p>
+  </main>
+</body>
+</html>

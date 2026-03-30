@@ -64,7 +64,12 @@ mkdir -p "${STAGE_DIR}"
     tar \
         --exclude='.git' \
         --exclude='./dist' \
-    	--exclude='./terminusd' \
+        --exclude='./terminusd' \
+        --exclude='./terminusctl' \
+        --exclude='./tests/test_inhibitor_config' \
+        --exclude='./tests/test_inhibitor_test_mode' \
+        --exclude='./tests/test_terminusctl_cli' \
+        --exclude='./core*' \
         -cf - .
 ) | tar -xf - -C "${STAGE_DIR}"
 

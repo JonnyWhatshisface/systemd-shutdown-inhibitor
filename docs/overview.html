@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - Overview</title>
+  <meta name="description" content="Overview documentation for terminusd: shutdown orchestration, guard behavior, and runtime control.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: overview</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Systemd Delay Inhibitor</div>
+      <h1>Deterministic shutdown orchestration with shutdown admission control</h1>
+      <p>terminusd gives total control over shutdowns/reboots on your hosts. Install updates on shutdown instead of using systemd offline-updates. Disable shutdown/reboots on systems with custom logic for decision making, protecting your HA clusters and preventing accidental reboots.</p>
+      <span class="badge">ascending order execution</span>
+      <span class="badge">failure gatekeeping</span>
+      <span class="badge">dynamic shutdown protection</span>
+      <span class="badge">flexible configuration</span>
+    </section>
+
+    <section class="grid">
+      <article class="card span-6">
+        <h2>Execution model</h2>
+        <ol>
+          <li>Acquire delay inhibitor lock with systemd-logind.</li>
+          <li>Wait for <code>PrepareForShutdown</code> over D-Bus.</li>
+          <li>Execute actions by ascending <code>priority</code>.</li>
+          <li>Release inhibitor and continue shutdown.</li>
+        </ol>
+      </article>
+
+      <article class="card span-6">
+        <h2>Shutdown Guard</h2>
+        <ul>
+          <li>Enable/Disable system-wide shutdowns and reboots</li>
+          <li>Leverage custom scripting logic</li>
+          <li>Periodic or real-time monitoring for decisions</li>
+        </ul>
+      </article>
+
+      <article class="card span-8">
+        <h2>terminusd helps:</h2>
+        <ul>
+          <li>Perform complex operations at time of shutdown/reboot that still need systemctl available</li>
+          <li>Protect systems from accidental shutdowns or reboots based on environment-specific requirements</li>
+        </ul>
+      </article>
+
+      <article class="card span-4">
+        <h2>Read next</h2>
+        <ul>
+          <li><a href="setup.html">Setup and service activation</a></li>
+          <li><a href="configuration.html">Core configuration keys</a></li>
+          <li><a href="shutdown-guard.html">Shutdown guard behavior</a></li>
+          <li><a href="scripts.html">Script section design</a></li>
+          <li><a href="terminusctl.html">Runtime control with terminusctl</a></li>
+        </ul>
+      </article>
+    </section>
+
+    <p class="footer">terminusd documentation :: oldschool unix vibe, modern operational clarity</p>
+  </main>
+</body>
+</html>

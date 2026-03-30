@@ -1,0 +1,105 @@
+.TH TERMINUSCTL 8 "March 2026" "terminusd" "System Administration"
+.SH NAME
+terminusctl \- runtime control client for terminusd
+.SH SYNOPSIS
+.B terminusctl
+.RI [ OPTION ]...\~ COMMAND \~ [ ARG ]
+.br
+.B terminusctl
+.RI [ OPTION ]...
+.SH DESCRIPTION
+.B terminusctl
+connects to the
+.B terminusd
+control socket and sends a single runtime management request.
+It is intended for operators who need to inspect daemon state or change
+runtime behavior without editing configuration files or restarting the
+daemon.
+.PP
+The
+.B status
+output gives a full overview of the current configuration of the daemon
+including an ordered overview of shutdown actions. It also allows for
+overriding the system-wide shutdown disablement state or starting and
+stopping the shutdown guard.
+.SH COMMANDS
+.TP
+.B start
+Start the
+.B terminusd
+daemon by executing
+.BR "systemctl start terminusd" .
+.TP
+.B stop
+Stop the
+.B terminusd
+daemon by executing
+.BR "systemctl stop terminusd" .
+.TP
+.B status
+Show the current daemon runtime status and shutdown guard state, including a full
+ordered list of shutdown actions.
+.TP
+.B reload-config
+Reload the daemon configuration and script definitions while the daemon
+remains running.
+.TP
+.BI "shutdown-guard " "enable|disable"
+Enable or disable the shutdown guard command.
+.TP
+.BI "shutdown-commands " "enable|disable"
+Enable or disable shutdown/reboot commands system-wide.
+.TP
+.B system-reboot
+Request a reboot through the daemon control path.
+Unless
+.B --force
+is provided,
+.B terminusctl
+prompts for confirmation first.
+.TP
+.B system-shutdown
+Request a shutdown through the daemon control path.
+Unless
+.B --force
+is provided,
+.B terminusctl
+prompts for confirmation first.
+.SH OPTIONS
+.B --set-logind-inhibitor-delay
+Tell the daemon to write its currently configured
+.B max_inhibit_delay
+value into
+.IR /etc/systemd/logind.conf .
+This is a one-shot administrative action and does not change the daemon's
+normal startup behavior for
+.BR set_max_inhibit_delay .
+.TP
+.B -f, --force
+Skip confirmation prompts for
+.B system-reboot
+and
+.BR system-shutdown .
+.TP
+.B --skip-scripts
+Only valid with
+.B system-reboot
+or
+.BR system-shutdown .
+Skips configured shutdown script execution for that request.
+.TP
+.B -h, --help
+Show a short usage summary.
+.SH FILES
+.TP
+.I /run/terminusd.sock
+UNIX domain control socket used by
+.BR terminusctl .
+.SH EXIT STATUS
+.B terminusctl
+returns 0 on success and non-zero on communication failures, invalid
+usage, or an error response from the daemon.
+.SH SEE ALSO
+.BR terminusd (8),
+.BR logind.conf (5),
+.BR systemctl (1)

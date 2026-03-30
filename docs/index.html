@@ -381,6 +381,19 @@
             word-break: break-all;
         }
 
+        .terminusctl-anim-terminal {
+            overflow-y: auto;
+            height: 380px;
+            scroll-behavior: smooth;
+            margin-top: 16px;
+        }
+
+        .terminusctl-anim-terminal pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
         .hero-cursor {
             display: inline-block;
             width: 0.52em;
@@ -443,7 +456,7 @@
                     </p>
                     <div class="cta">
                         <a class="btn primary" href="https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor">View Source</a>
-                        <a class="btn ghost" href="../README.md">Read Docs</a>
+                        <a class="btn ghost" href="overview.html">Read Docs</a>
                     </div>
                 </div>
                 <aside class="terminal hero-anim-terminal" id="hero-anim-wrap" aria-label="Animated terminusctl demo">
@@ -547,70 +560,8 @@
                     <p>Push the daemon's configured inhibit delay into logind.conf on demand, keeping systemd and terminusd in sync without a manual edit.</p>
                 </article>
             </div>
-            <aside class="terminal" style="margin-top: 16px;" aria-label="terminusctl help output">
-<pre>
-<span class="ok">$ terminusctl help</span>
-Usage: terminusctl [options] &lt;command&gt; [args]
-
-Commands:
-  start                 Start the terminusd daemon
-  stop                  Stop the terminusd daemon
-    status                Show current daemon runtime status
-    reload-config         Reload scripts/config while daemon is running
-    shutdown-guard        enable|disable shutdown guard
-    shutdown-commands     enable|disable shutdown commands
-    system-reboot         Request reboot through daemon control path
-    system-shutdown       Request shutdown through daemon control path
-
-Options:
-    -f, --force           Skip confirmation prompt for reboot/shutdown
-  --set-logind-inhibitor-delay
-                        Write daemon's configured max inhibit delay to logind.conf
-    --skip-scripts        With system-reboot/system-shutdown, skip script execution
-  -h, --help            Show this help
-
-<span class="ok">$ terminusctl status</span>
-========================================
-            terminusd status
-========================================
-
-Inhibitor Settings
-(Maximum amount of time shutdown can be delayed during executions)
-------------------
-Daemon Max Delay       : 2700s
-Logind Max Delay       : 2700s
-Delay Match            : yes
-
-Shutdown Controls
------------------
-Shutdown Requests      : enabled
-Shutdown Guard         : enabled
-Guard Type             : persist
-Guard Command          : /opt/terminusd/scripts/example-persistent-shutdown-guard.sh
-
-Shutdown Execution Plan 
-(Equal priority items run in parallel)
------------------------
-Enabled scripts        : 4
-Priority 100           : notifyusers
-    Command              : /opt/terminusd/scripts/example-shutdown-notify.sh
-    Critical             : no
-Priority 200           : hagrp-migrate
-    Command              : /usr/local/bin/migrate_services.sh --force
-    Critical             : yes
-Priority 300           : stopvcs
-    Command              : /usr/local/bin/shutdown_vcs_services.sh
-    Critical             : yes
-Priority 400           : apply-package-updates
-    Command              : /opt/terminusd/scripts/example-package-updates.sh
-    Critical             : yes
-Priority 400           : apply-firmware-updates
-    Command              : /opt/terminusd/scripts/update-firmwares.sh
-    Critical             : yes
-Priority 900           : final-sync
-    Command              : /usr/loca/bin/final-shutdown-steps.py --sync
-    Critical             : no
-</pre>
+            <aside class="terminal terminusctl-anim-terminal" id="terminusctl-anim-wrap" aria-label="Animated terminusctl demo">
+<pre id="terminusctl-anim-pre"></pre>
             </aside>
         </section>
 
@@ -640,454 +591,515 @@ Priority 900           : final-sync
 <script>
 (function () {
     'use strict';
-    var pre  = document.getElementById('hero-anim-pre');
-    var wrap = document.getElementById('hero-anim-wrap');
-    if (!pre || !wrap) return;
 
-    var PROMPT     = '# ';
-    var TYPE_MIN   = 34;
-    var TYPE_JITTER = 26;
-    var CMD_PAUSE  = 380;
-    var LINE_DELAY = 52;
-    var STEP_GAP   = 6000;
-    var END_PAUSE  = 120000;
+    /* ─── Shared terminal animation engine ─────────────────────────────────────
+     *
+     * TermAnim(preId, wrapId, opts) → instance
+     *
+     * opts keys (all optional):
+     *   prompt      string   prompt prefix          default '# '
+     *   typeMin     ms       min char delay          default 34
+     *   typeJitter  ms       random added delay      default 22
+     *   cmdPause    ms       pause after command     default 400
+     *   lineDelay   ms       delay between lines     default 60
+     *
+     * instance methods:
+     *   ln(text, cls)                 → line object { text, cls }
+     *   typeCmd(cmd, done, [pause])   type a command then call done
+     *   showLines(lines, done, [ms])  stream output lines then call done
+     *   addLine(text, [cls])          append a line instantly
+     *   addBlankLine()                append blank line + re-render
+     *   setPrompt(bool)               show/hide idle prompt
+     *   clear()                       reset terminal state
+     *   render()                      force re-render
+     *   runSteps(steps, stepGap, endPause)
+     *     steps[]: { cmd, out[], cmdPause?, lineDelay? }
+     * ─────────────────────────────────────────────────────────────────────── */
+    function TermAnim(preId, wrapId, opts) {
+        var pre  = document.getElementById(preId);
+        var wrap = document.getElementById(wrapId);
+        if (!pre || !wrap) return null;
 
-    function esc(s) {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
+        opts = opts || {};
+        var PROMPT      = opts.prompt     || '# ';
+        var TYPE_MIN    = opts.typeMin    || 34;
+        var TYPE_JITTER = opts.typeJitter || 22;
+        var CMD_PAUSE   = opts.cmdPause   || 400;
+        var LINE_DELAY  = opts.lineDelay  || 60;
 
-    function ln(text, cls) { return { text: text || '', cls: cls || '' }; }
+        var html       = '';
+        var isTyping   = false;
+        var showPrompt = true;
 
-    var steps = [
-        {
-            cmd: 'terminusctl --help',
-            out: [
-                ln('Usage: terminusctl [options] <command> [args]'),
-                ln(''),
-                ln('Commands:'),
-                ln('  start                 Start the terminusd daemon'),
-                ln('  stop                  Stop the terminusd daemon'),
-                ln('  status                Show current daemon status'),
-                ln('  reload-config         Reload scripts/config'),
-                ln('  shutdown-guard        enable|disable shutdown guard'),
-                ln('  shutdown-commands     enable|disable shutdown commands'),
-                ln('  system-reboot         Request reboot through daemon'),
-                ln('  system-shutdown       Request shutdown through daemon'),
-                ln(''),
-                ln('Options:'),
-                ln('  -f, --force           Skip confirmation prompt'),
-                ln('  --set-logind-inhibitor-delay'),
-                ln('                        Write daemon inhibit delay to logind.conf'),
-                ln('  --skip-scripts        Skip script execution'),
-                ln('  -h, --help            Show this help'),
-            ]
-        },
-        {
-            cmd: 'terminusctl status',
-            out: [
-                ln('========================================'),
-                ln('            terminusd status'),
-                ln('========================================'),
-                ln(''),
-                ln('Inhibitor Settings'),
-                ln('------------------'),
-                ln('Daemon Max Delay       : 30s'),
-                ln('Logind Max Delay       : 30s'),
-                ln('Delay Match            : yes'),
-                ln(''),
-                ln('Shutdown Controls'),
-                ln('-----------------'),
-                ln('Shutdown Requests      : disabled', 'error'),
-                ln('Shutdown Guard         : enabled'),
-                ln('Guard Type             : persist'),
-                ln('Guard Command          : /opt/terminusd/scripts/example-persistent-shutdown-guard.sh'),
-                ln(''),
-                ln('Shutdown Execution Plan'),
-                ln('-----------------------'),
-                ln('Enabled scripts        : 4'),
-                ln('Priority 100           : notifyusers'),
-                ln('  Command              : /opt/terminusd/scripts/notify.sh'),
-                ln('  Critical             : no'),
-                ln('Priority 200           : drain-app'),
-                ln('  Command              : /usr/local/bin/drain-app-traffic --timeout 20'),
-                ln('  Critical             : yes', 'warn'),
-                ln('Priority 300           : applyupdates'),
-                ln('  Command              : /opt/terminusd/scripts/applyupdates.sh'),
-                ln('  Critical             : no'),
-                ln('Priority 900           : final-sync'),
-                ln('  Command              : /usr/bin/sync'),
-                ln('  Critical             : no'),
-            ]
-        },
-        {
-            cmd: 'cat /var/log/messages | grep terminusd',
-            lineDelay: 68,
-            out: [
-                ln('Mar 28 09:14:02 localhost terminusd[1842]: inhibitor lock acquired (fd=5)'),
-                ln('Mar 28 09:14:02 localhost terminusd[1842]: listening for pre-shutdown on D-Bus'),
-                ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persist mode: command="/opt/terminusd/scripts/example-persistent-shutdown-guard.sh"'),
-                ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persistent user-defined guard started (pid 1849)'),
-                ln('Mar 28 09:44:18 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 1/3)', 'warn'),
-                ln('Mar 28 09:44:48 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 2/3)', 'warn'),
-                ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] WARNING: Failure threshold reached; requesting shutdown disable', 'warn'),
-                ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] DISABLED shutdowns', 'warn'),
-            ]
-        },
-        {
-            cmd: '/usr/sbin/reboot',
-            cmdPause: 180,
-            out: [ ln('Call to Reboot failed: Access denied', 'error') ]
-        },
-        {
-            cmd: 'systemctl reboot',
-            cmdPause: 180,
-            out: [ ln('Call to Reboot failed: Access denied', 'error') ]
-        },
-        {
-            cmd: 'terminusctl shutdown-commands enable',
-            out: [
-                ln('shutdown enabled', 'ok'),
-            ]
-        },
-        {
-            cmd: 'reboot',
-            out: [
-                ln('NOTICE: broadcast wall message to logged-in users', 'warn'),
-                ln('Broadcast message from root@localhost:'),
-                ln('  System is preparing for shutdown. Please save your work and log out.'),
-            ]
-        },
-        {
-            cmd: 'cat /var/log/messages | grep -i terminus',
-            lineDelay: 68,
-            out: [
-                ln('Mar 28 09:46:02 localhost terminusd[1842]: [notifyusers] Launching command="/opt/terminusd/scripts/example-shutdown-notify.sh" priority=100 user=root group=root'),
-                ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
-                ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
-                ln('Mar 28 09:46:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
-                ln('Mar 28 09:46:26 localhost terminusd[1842]: [drain-app] finished successfully'),
-                ln('Mar 28 09:46:27 localhost terminusd[1842]: [applyupdates] Launching command="/opt/terminusd/scripts/example-package-updates.sh" priority=300 user=root group=root'),
-                ln('Mar 28 09:57:32 localhost terminusd[1842]: [applyupdates] finished successfully'),
-                ln('Mar 28 09:57:33 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
-                ln('Mar 28 09:57:34 localhost terminusd[1842]: [final-sync] finished successfully'),
-                ln('Mar 28 09:57:34 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
-                ln(''),
-                ln('Notice: Updates have finished installing and the system will now reboot!'),
-                ln(''),
-                ln('Connection to localhost closed by remote host.', 'error'),
-                ln('client_loop: send disconnect: Broken pipe', 'error'),
-            ]
-        },
-    ];
-
-    var html = '';
-    var isTyping = false;
-
-    function render(extra) {
-        var idlePrompt = isTyping ? '' : '<span class="ok">' + esc(PROMPT) + '</span>';
-        pre.innerHTML = html + extra + idlePrompt + '<span class="hero-cursor"></span>';
-        wrap.scrollTop = wrap.scrollHeight;
-    }
-
-    function addOutputLine(text, cls) {
-        var e = esc(text);
-        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
-    }
-
-    function typeCmd(cmd, pause, done) {
-        isTyping = true;
-        html += '<span class="ok">' + esc(PROMPT) + '</span>';
-        var i = 0;
-        function tick() {
-            if (i < cmd.length) {
-                html += esc(cmd[i++]);
-                render('');
-                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
-            } else {
-                html += '\n';
-                isTyping = false;
-                render('');
-                setTimeout(done, pause);
-            }
+        function esc(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
-        render('');
-        setTimeout(tick, 90);
-    }
 
-    function showLines(lines, idx, delay, done) {
-        if (idx >= lines.length) {
+        function render() {
+            var p = (showPrompt && !isTyping) ? '<span class="ok">' + esc(PROMPT) + '</span>' : '';
+            pre.innerHTML = html + p + '<span class="hero-cursor"></span>';
+            wrap.scrollTop = wrap.scrollHeight;
+        }
+
+        function addLine(text, cls) {
+            var e = esc(text || '');
+            html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
+        }
+
+        function addBlankLine() {
             html += '\n';
-            render('');
-            done();
-            return;
+            render();
         }
-        addOutputLine(lines[idx].text, lines[idx].cls);
-        render('');
-        setTimeout(function () { showLines(lines, idx + 1, delay, done); }, delay);
+
+        function clear() {
+            html       = '';
+            isTyping   = false;
+            showPrompt = true;
+        }
+
+        function typeCmd(cmd, done, pauseOverride) {
+            var pause = (pauseOverride !== undefined) ? pauseOverride : CMD_PAUSE;
+            isTyping = true;
+            html += '<span class="ok">' + esc(PROMPT) + '</span>';
+            var i = 0;
+            function tick() {
+                if (i < cmd.length) {
+                    html += esc(cmd[i++]);
+                    render();
+                    setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
+                } else {
+                    html += '\n';
+                    isTyping = false;
+                    render();
+                    setTimeout(done, pause);
+                }
+            }
+            render();
+            setTimeout(tick, 90);
+        }
+
+        function showLines(lines, done, delayOverride) {
+            var delay = (delayOverride !== undefined) ? delayOverride : LINE_DELAY;
+            function next(idx) {
+                if (idx >= lines.length) { render(); done(); return; }
+                addLine(lines[idx].text, lines[idx].cls);
+                render();
+                setTimeout(function () { next(idx + 1); }, delay);
+            }
+            next(0);
+        }
+
+        function runSteps(steps, stepGap, endPause) {
+            stepGap  = stepGap  || 6000;
+            endPause = endPause || 120000;
+            function doStep(i) {
+                if (i >= steps.length) {
+                    setTimeout(function () { clear(); render(); doStep(0); }, endPause);
+                    return;
+                }
+                var step = steps[i];
+                var ld = (step.lineDelay !== undefined) ? step.lineDelay : LINE_DELAY;
+                typeCmd(step.cmd, function () {
+                    showLines(step.out || [], function () {
+                        addBlankLine();
+                        setTimeout(function () { doStep(i + 1); }, stepGap);
+                    }, ld);
+                }, step.cmdPause);
+            }
+            clear(); render();
+            setTimeout(function () { doStep(0); }, 600);
+        }
+
+        return {
+            ln:           function (text, cls) { return { text: text || '', cls: cls || '' }; },
+            render:       render,
+            addLine:      addLine,
+            addBlankLine: addBlankLine,
+            clear:        clear,
+            typeCmd:      typeCmd,
+            showLines:    showLines,
+            runSteps:     runSteps,
+            setPrompt:    function (v) { showPrompt = v; }
+        };
     }
 
-    function runStep(i) {
-        if (i >= steps.length) {
-            setTimeout(function () {
-                html = '';
-                render('');
-                runStep(0);
-            }, END_PAUSE);
-            return;
-        }
-        var step = steps[i];
-        var pause = (step.cmdPause !== undefined) ? step.cmdPause : CMD_PAUSE;
-        var delay = (step.lineDelay !== undefined) ? step.lineDelay : LINE_DELAY;
-        typeCmd(step.cmd, pause, function () {
-            showLines(step.out, 0, delay, function () {
-                setTimeout(function () { runStep(i + 1); }, STEP_GAP);
+    /* ─── Visibility-triggered start ─────────────────────────────────────────
+     * Fires cb() once when el enters the viewport (≥10% visible).
+     * Falls back to an immediate call when IntersectionObserver is unavailable.
+     * ─────────────────────────────────────────────────────────────────────── */
+    function whenVisible(el, cb) {
+        if (!el || !('IntersectionObserver' in window)) { cb(); return; }
+        var io = new IntersectionObserver(function (entries) {
+            if (entries[0].isIntersecting) { io.disconnect(); cb(); }
+        }, { threshold: 0.1 });
+        io.observe(el);
+    }
+
+    /* ─── Hero terminal ─────────────────────────────────────────────────────── */
+    (function () {
+        var t = TermAnim('hero-anim-pre', 'hero-anim-wrap', {
+            typeMin: 34, typeJitter: 26, cmdPause: 380, lineDelay: 52
+        });
+        if (!t) return;
+        var ln = t.ln;
+
+        whenVisible(document.getElementById('hero-anim-wrap'), function () { t.runSteps([
+            {
+                cmd: 'terminusctl --help',
+                out: [
+                    ln('Usage: terminusctl [options] <command> [args]'),
+                    ln(''),
+                    ln('Commands:'),
+                    ln('  start                 Start the terminusd daemon'),
+                    ln('  stop                  Stop the terminusd daemon'),
+                    ln('  status                Show current daemon status'),
+                    ln('  reload-config         Reload scripts/config'),
+                    ln('  shutdown-guard        enable|disable shutdown guard'),
+                    ln('  shutdown-commands     enable|disable shutdown commands'),
+                    ln('  system-reboot         Request reboot through daemon'),
+                    ln('  system-shutdown       Request shutdown through daemon'),
+                    ln(''),
+                    ln('Options:'),
+                    ln('  -f, --force           Skip confirmation prompt'),
+                    ln('  --set-logind-inhibitor-delay'),
+                    ln('                        Write daemon inhibit delay to logind.conf'),
+                    ln('  --skip-scripts        Skip script execution'),
+                    ln('  -h, --help            Show this help'),
+                ]
+            },
+            {
+                cmd: 'terminusctl status',
+                out: [
+                    ln('========================================'),
+                    ln('            terminusd status'),
+                    ln('========================================'),
+                    ln(''),
+                    ln('Inhibitor Settings'),
+                    ln('------------------'),
+                    ln('Daemon Max Delay       : 30s'),
+                    ln('Logind Max Delay       : 30s'),
+                    ln('Delay Match            : yes'),
+                    ln(''),
+                    ln('Shutdown Controls'),
+                    ln('-----------------'),
+                    ln('Shutdown Requests      : disabled', 'error'),
+                    ln('Shutdown Guard         : enabled'),
+                    ln('Guard Type             : persist'),
+                    ln('Guard Command          : /usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh'),
+                    ln(''),
+                    ln('Shutdown Execution Plan'),
+                    ln('-----------------------'),
+                    ln('Enabled scripts        : 4'),
+                    ln('Priority 100           : notifyusers'),
+                    ln('  Command              : /usr/libexec/terminusd/examples/notify.sh'),
+                    ln('  Critical             : no'),
+                    ln('Priority 200           : drain-app'),
+                    ln('  Command              : /usr/local/bin/drain-app-traffic --timeout 20'),
+                    ln('  Critical             : yes', 'warn'),
+                    ln('Priority 300           : applyupdates'),
+                    ln('  Command              : /usr/libexec/terminusd/examples/applyupdates.sh'),
+                    ln('  Critical             : no'),
+                    ln('Priority 900           : final-sync'),
+                    ln('  Command              : /usr/bin/sync'),
+                    ln('  Critical             : no'),
+                ]
+            },
+            {
+                cmd: 'cat /var/log/messages | grep terminusd',
+                lineDelay: 68,
+                out: [
+                    ln('Mar 28 09:14:02 localhost terminusd[1842]: inhibitor lock acquired (fd=5)'),
+                    ln('Mar 28 09:14:02 localhost terminusd[1842]: listening for pre-shutdown on D-Bus'),
+                    ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persist mode: command="/usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh"'),
+                    ln('Mar 28 09:14:03 localhost terminusd[1842]: [shutdown_guard] persistent user-defined guard started (pid 1849)'),
+                    ln('Mar 28 09:44:18 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 1/3)', 'warn'),
+                    ln('Mar 28 09:44:48 localhost terminusd[1842]: [shutdown_guard] WARNING: IP 192.168.1.225 not responding (failure 2/3)', 'warn'),
+                    ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] WARNING: Failure threshold reached; requesting shutdown disable', 'warn'),
+                    ln('Mar 28 09:45:18 localhost terminusd[1842]: [shutdown_guard] DISABLED shutdowns', 'warn'),
+                ]
+            },
+            {
+                cmd: '/usr/sbin/reboot',
+                cmdPause: 180,
+                out: [ ln('Call to Reboot failed: Access denied', 'error') ]
+            },
+            {
+                cmd: 'systemctl reboot',
+                cmdPause: 180,
+                out: [ ln('Call to Reboot failed: Access denied', 'error') ]
+            },
+            {
+                cmd: 'terminusctl shutdown-commands enable',
+                out: [ ln('shutdown enabled', 'ok') ]
+            },
+            {
+                cmd: 'reboot',
+                out: [
+                    ln('NOTICE: broadcast wall message to logged-in users', 'warn'),
+                    ln('Broadcast message from root@localhost:'),
+                    ln('  System is preparing for shutdown. Please save your work and log out.'),
+                ]
+            },
+            {
+                cmd: 'cat /var/log/messages | grep -i terminus',
+                lineDelay: 68,
+                out: [
+                    ln('Mar 28 09:46:02 localhost terminusd[1842]: [notifyusers] Launching command="/usr/libexec/terminusd/examples/example-shutdown-notify.sh" priority=100 user=root group=root'),
+                    ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
+                    ln('Mar 28 09:46:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
+                    ln('Mar 28 09:46:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
+                    ln('Mar 28 09:46:26 localhost terminusd[1842]: [drain-app] finished successfully'),
+                    ln('Mar 28 09:46:27 localhost terminusd[1842]: [applyupdates] Launching command="/usr/libexec/terminusd/examples/example-package-updates.sh" priority=300 user=root group=root'),
+                    ln('Mar 28 09:57:32 localhost terminusd[1842]: [applyupdates] finished successfully'),
+                    ln('Mar 28 09:57:33 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
+                    ln('Mar 28 09:57:34 localhost terminusd[1842]: [final-sync] finished successfully'),
+                    ln('Mar 28 09:57:34 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
+                    ln(''),
+                    ln('Notice: Updates have finished installing and the system will now reboot!'),
+                    ln(''),
+                    ln('Connection to localhost closed by remote host.', 'error'),
+                    ln('client_loop: send disconnect: Broken pipe', 'error'),
+                ]
+            },
+        ], 6000, 120000); }); // end whenVisible
+    }());
+
+    /* ─── Ordered shutdown terminal ─────────────────────────────────────────── */
+    (function () {
+        var t = TermAnim('ordered-anim-pre', 'ordered-anim-wrap', {
+            typeMin: 34, typeJitter: 22, lineDelay: 66, cmdPause: 450
+        });
+        if (!t) return;
+        var ln = t.ln;
+        var STEP_GAP  = 6000;
+        var END_PAUSE = 95000;
+
+        function run() {
+            t.clear(); t.render();
+            t.typeCmd('reboot', function () {
+                t.addLine('Broadcast message from root@localhost:', 'warn');
+                t.addLine('  The system is going down for reboot NOW!', 'warn');
+                t.addBlankLine();
+                setTimeout(function () {
+                    t.typeCmd('tail -f /var/log/messages | grep terminusd', function () {
+                        t.setPrompt(false);
+                        t.showLines([
+                            ln('Mar 28 11:05:02 localhost terminusd[1842]: [notifyusers] Launching command="/usr/libexec/terminusd/examples/example-shutdown-notify.sh" priority=100 user=root group=root'),
+                            ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
+                            ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
+                            ln('Mar 28 11:05:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
+                            ln('Mar 28 11:06:15 localhost terminusd[1842]: [drain-app] finished successfully'),
+                            ln('Mar 28 11:06:16 localhost terminusd[1842]: [applyupdates] Launching command="/usr/libexec/terminusd/examples/example-package-updates.sh" priority=300 user=root group=root'),
+                            ln('Mar 28 11:17:08 localhost terminusd[1842]: [applyupdates] finished successfully'),
+                            ln('Mar 28 11:17:09 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
+                            ln('Mar 28 11:17:15 localhost terminusd[1842]: [final-sync] finished successfully'),
+                            ln('Mar 28 11:17:16 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
+                            ln(''),
+                            ln('Connection to localhost closed by remote host.', 'error'),
+                            ln('client_loop: send disconnect: Broken pipe', 'error'),
+                        ], function () {
+                            t.setPrompt(false);
+                            t.render();
+                            setTimeout(run, END_PAUSE);
+                        });
+                    });
+                }, STEP_GAP);
             });
+        }
+
+        whenVisible(document.getElementById('ordered-anim-wrap'), run);
+    }());
+
+    /* ─── Shutdown guard terminal ────────────────────────────────────────────── */
+    (function () {
+        var t = TermAnim('guard-anim-pre', 'guard-anim-wrap', {
+            typeMin: 34, typeJitter: 22, lineDelay: 68, cmdPause: 420
         });
-    }
+        if (!t) return;
+        var ln = t.ln;
+        var STEP_GAP       = 6000;
+        var LONG_TAIL_WAIT = 10000;
+        var END_PAUSE      = 90000;
 
-    render('');
-    setTimeout(function () { runStep(0); }, 600);
-}());
-
-(function () {
-    'use strict';
-
-    var pre  = document.getElementById('ordered-anim-pre');
-    var wrap = document.getElementById('ordered-anim-wrap');
-    if (!pre || !wrap) return;
-
-    var PROMPT = '# ';
-    var TYPE_MIN = 34;
-    var TYPE_JITTER = 22;
-    var LINE_DELAY = 66;
-    var CMD_PAUSE = 450;
-    var STEP_GAP = 6000;
-    var END_PAUSE = 95000;
-
-    var html = '';
-    var isTyping = false;
-    var showIdlePrompt = true;
-
-    function esc(s) {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function ln(text, cls) {
-        return { text: text || '', cls: cls || '' };
-    }
-
-    function render(extra) {
-        var idlePrompt = (!isTyping && showIdlePrompt) ? '<span class="ok">' + esc(PROMPT) + '</span>' : '';
-        pre.innerHTML = html + (extra || '') + idlePrompt + '<span class="hero-cursor"></span>';
-        wrap.scrollTop = wrap.scrollHeight;
-    }
-
-    function addLine(text, cls) {
-        var e = esc(text);
-        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
-    }
-
-    function typeCmd(cmd, done) {
-        isTyping = true;
-        html += '<span class="ok">' + esc(PROMPT) + '</span>';
-        var i = 0;
-
-        function tick() {
-            if (i < cmd.length) {
-                html += esc(cmd[i++]);
-                render('');
-                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
-            } else {
-                html += '\n';
-                isTyping = false;
-                render('');
-                setTimeout(done, CMD_PAUSE);
-            }
-        }
-
-        render('');
-        setTimeout(tick, 90);
-    }
-
-    function showLines(lines, idx, done) {
-        if (idx >= lines.length) {
-            render('');
-            done();
-            return;
-        }
-        addLine(lines[idx].text, lines[idx].cls);
-        render('');
-        setTimeout(function () { showLines(lines, idx + 1, done); }, LINE_DELAY);
-    }
-
-    function run() {
-        html = '';
-        isTyping = false;
-        showIdlePrompt = true;
-        render('');
-
-        typeCmd('reboot', function () {
-            addLine('Broadcast message from root@localhost:', 'warn');
-            addLine('  The system is going down for reboot NOW!', 'warn');
-            html += '\n';
-            render('');
-
-            setTimeout(function () {
-                typeCmd('tail -f /var/log/messages | grep terminusd', function () {
-                    showIdlePrompt = false;
-                    showLines([
-                        ln('Mar 28 11:05:02 localhost terminusd[1842]: [notifyusers] Launching command="/opt/terminusd/scripts/example-shutdown-notify.sh" priority=100 user=root group=root'),
-                        ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] NOTICE: broadcast wall message to logged-in users'),
-                        ln('Mar 28 11:05:03 localhost terminusd[1842]: [notifyusers] finished successfully'),
-                        ln('Mar 28 11:05:04 localhost terminusd[1842]: [drain-app] Launching command="/usr/local/bin/drain-app-traffic --timeout 20" priority=200 user=root group=root'),
-                        ln('Mar 28 11:06:15 localhost terminusd[1842]: [drain-app] finished successfully'),
-                        ln('Mar 28 11:06:16 localhost terminusd[1842]: [applyupdates] Launching command="/opt/terminusd/scripts/example-package-updates.sh" priority=300 user=root group=root'),
-                        ln('Mar 28 11:17:08 localhost terminusd[1842]: [applyupdates] finished successfully'),
-                        ln('Mar 28 11:17:09 localhost terminusd[1842]: [final-sync] Launching command="/usr/bin/sync" priority=900 user=root group=root'),
-                        ln('Mar 28 11:17:15 localhost terminusd[1842]: [final-sync] finished successfully'),
-                        ln('Mar 28 11:17:16 localhost terminusd[1842]: All scripts finished. Releasing inhibitor lock.'),
-                        ln(''),
-                        ln('Connection to localhost closed by remote host.', 'error'),
-                        ln('client_loop: send disconnect: Broken pipe', 'error')
-                    ], 0, function () {
-                        showIdlePrompt = false;
-                        render('');
-                        setTimeout(run, END_PAUSE);
+        function run() {
+            t.clear(); t.render();
+            t.typeCmd('reboot', function () {
+                t.addLine('Call to Reboot failed: Access denied', 'error');
+                t.addBlankLine();
+                setTimeout(function () {
+                    t.typeCmd('tail -f /var/log/messages | grep terminusd', function () {
+                        t.setPrompt(false);
+                        t.showLines([
+                            ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persist mode: command="/usr/libexec/terminusd/examples/example-persistent-shutdown-guard.sh" user=svcacct group=svcacct'),
+                            ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persistent user-defined guard started (pid 284776)'),
+                            ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Configuration: IP=192.168.1.225 interval=30s threshold=3 timeout=5s'),
+                            ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Persistent shutdown guard started for 192.168.1.225'),
+                            ln('Mar 28 13:04:36 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 1/3)', 'warn'),
+                            ln('Mar 28 13:04:41 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 2/3)', 'warn'),
+                            ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] WARNING: Failure threshold reached for 192.168.1.225; requesting shutdown disable', 'warn'),
+                            ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] DISABLED shutdowns (runtime)', 'warn'),
+                        ], function () {
+                            setTimeout(function () {
+                                t.showLines([
+                                    ln('Mar 28 13:04:51 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 4)', 'warn'),
+                                    ln('Mar 28 13:04:56 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 5)', 'warn'),
+                                    ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: IP 192.168.1.225 is responding again after 5 consecutive failures'),
+                                    ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: Connectivity restored; requesting shutdown enable'),
+                                    ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] ENABLED shutdowns (runtime)', 'ok'),
+                                ], function () {
+                                    t.setPrompt(true);
+                                    t.addBlankLine();
+                                    setTimeout(function () {
+                                        t.typeCmd('reboot', function () {
+                                            t.setPrompt(false);
+                                            t.addLine('Connection to localhost closed by remote host.', 'error');
+                                            t.addLine('client_loop: send disconnect: Broken pipe', 'error');
+                                            t.render();
+                                            setTimeout(run, END_PAUSE);
+                                        });
+                                    }, STEP_GAP);
+                                }, 0);
+                            }, LONG_TAIL_WAIT);
+                        }, 0);
                     });
-                });
-            }, STEP_GAP);
-        });
-    }
-
-    run();
-}());
-
-(function () {
-    'use strict';
-
-    var pre  = document.getElementById('guard-anim-pre');
-    var wrap = document.getElementById('guard-anim-wrap');
-    if (!pre || !wrap) return;
-
-    var PROMPT = '# ';
-    var TYPE_MIN = 34;
-    var TYPE_JITTER = 22;
-    var LINE_DELAY = 68;
-    var CMD_PAUSE = 420;
-    var STEP_GAP = 6000;
-    var LONG_TAIL_WAIT = 10000;
-    var END_PAUSE = 90000;
-
-    var html = '';
-    var isTyping = false;
-    var showIdlePrompt = true;
-
-    function esc(s) {
-        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function ln(text, cls) {
-        return { text: text || '', cls: cls || '' };
-    }
-
-    function render(extra) {
-        var idlePrompt = (!isTyping && showIdlePrompt) ? '<span class="ok">' + esc(PROMPT) + '</span>' : '';
-        pre.innerHTML = html + extra + idlePrompt + '<span class="hero-cursor"></span>';
-        wrap.scrollTop = wrap.scrollHeight;
-    }
-
-    function addLine(text, cls) {
-        var e = esc(text);
-        html += cls ? '<span class="' + cls + '">' + e + '</span>\n' : e + '\n';
-    }
-
-    function typeCmd(cmd, done) {
-        isTyping = true;
-        html += '<span class="ok">' + esc(PROMPT) + '</span>';
-        var i = 0;
-
-        function tick() {
-            if (i < cmd.length) {
-                html += esc(cmd[i++]);
-                render('');
-                setTimeout(tick, TYPE_MIN + Math.random() * TYPE_JITTER);
-            } else {
-                html += '\n';
-                isTyping = false;
-                render('');
-                setTimeout(done, CMD_PAUSE);
-            }
+                }, STEP_GAP);
+            });
         }
 
-        render('');
-        setTimeout(tick, 90);
-    }
+        whenVisible(document.getElementById('guard-anim-wrap'), run);
+    }());
 
-    function showLines(lines, idx, done) {
-        if (idx >= lines.length) {
-            render('');
-            done();
-            return;
-        }
-        addLine(lines[idx].text, lines[idx].cls);
-        render('');
-        setTimeout(function () { showLines(lines, idx + 1, done); }, LINE_DELAY);
-    }
-
-    function run() {
-        html = '';
-        showIdlePrompt = true;
-        render('');
-
-        typeCmd('reboot', function () {
-            addLine('Call to Reboot failed: Access denied', 'error');
-            html += '\n';
-            render('');
-
-            setTimeout(function () {
-                typeCmd('tail -f /var/log/messages | grep terminusd', function () {
-                    showIdlePrompt = false;
-                    showLines([
-                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persist mode: command="/opt/terminusd/scripts/example-persistent-shutdown-guard.sh" user=svcacct group=svcacct'),
-                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] persistent user-defined guard started (pid 284776)'),
-                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Configuration: IP=192.168.1.225 interval=30s threshold=3 timeout=5s'),
-                        ln('Mar 28 13:04:31 localhost terminusd[284775]: [shutdown_guard] INFO: Persistent shutdown guard started for 192.168.1.225'),
-                        ln('Mar 28 13:04:36 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 1/3)', 'warn'),
-                        ln('Mar 28 13:04:41 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 is not responding (failure 2/3)', 'warn'),
-                        ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] WARNING: Failure threshold reached for 192.168.1.225; requesting shutdown disable', 'warn'),
-                        ln('Mar 28 13:04:46 localhost terminusd[284775]: [shutdown_guard] DISABLED shutdowns (runtime)', 'warn')
-                    ], 0, function () {
-                        setTimeout(function () {
-                            showLines([
-                                ln('Mar 28 13:04:51 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 4)', 'warn'),
-                                ln('Mar 28 13:04:56 localhost terminusd[284775]: [shutdown_guard] WARNING: IP 192.168.1.225 still unreachable (consecutive failures: 5)', 'warn'),
-                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: IP 192.168.1.225 is responding again after 5 consecutive failures'),
-                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] INFO: Connectivity restored; requesting shutdown enable'),
-                                ln('Mar 28 13:05:01 localhost terminusd[284775]: [shutdown_guard] ENABLED shutdowns (runtime)', 'ok')
-                            ], 0, function () {
-                                showIdlePrompt = true;
-                                html += '\n';
-                                render('');
-
-                                setTimeout(function () {
-                                    typeCmd('reboot', function () {
-                                        showIdlePrompt = false;
-                                        addLine('Connection to localhost closed by remote host.', 'error');
-                                        addLine('client_loop: send disconnect: Broken pipe', 'error');
-                                        render('');
-
-                                        setTimeout(run, END_PAUSE);
-                                    });
-                                }, STEP_GAP);
-                            });
-                        }, LONG_TAIL_WAIT);
-                    });
-                });
-            }, STEP_GAP);
+    /* ─── terminusctl terminal ──────────────────────────────────────────────── */
+    (function () {
+        var t = TermAnim('terminusctl-anim-pre', 'terminusctl-anim-wrap', {
+            typeMin: 34, typeJitter: 22, cmdPause: 400, lineDelay: 46
         });
-    }
+        if (!t) return;
+        var ln = t.ln;
 
-    run();
+        var STATUS_OUT_1 = [
+            ln('========================================'),
+            ln('            terminusd status'),
+            ln('========================================'),
+            ln(''),
+            ln('Inhibitor Settings'),
+            ln('------------------'),
+            ln('Daemon Max Delay       : 1800s'),
+            ln('Logind Max Delay       : 1800s'),
+            ln('Delay Match            : yes'),
+            ln(''),
+            ln('Shutdown Controls'),
+            ln('-----------------'),
+            ln('Shutdown Requests      : enabled', 'ok'),
+            ln('Shutdown Guard         : disabled'),
+            ln('Guard Type             : oneshot'),
+            ln('Guard Command          : <unset>'),
+            ln('Guard User             : <daemon>'),
+            ln('Guard Group            : <daemon>'),
+            ln('Guard Env File         : <inherited>'),
+            ln('Guard Interval         : 30s'),
+            ln('Guard Threshold        : 1'),
+            ln(''),
+            ln('Shutdown Execution Plan'),
+            ln('---------------------'),
+            ln('Enabled Scripts  : 3'),
+            ln(''),
+            ln('Priority 100 (2 scripts)'),
+            ln('  [1] notifyusers'),
+            ln('      critical : no'),
+            ln('      command  : /usr/libexec/terminusd/examples/example-shutdown-notify.sh'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+            ln(''),
+            ln('  [2] sleepdelay'),
+            ln('      critical : no'),
+            ln('      command  : /bin/sleep 5'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+            ln(''),
+            ln('Priority 200 (1 script)'),
+            ln('  [3] terminateusersessions'),
+            ln('      critical : no'),
+            ln('      command  : /usr/libexec/terminusd/examples/example-terminate-user-sessions.sh'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+        ];
+
+        var STATUS_OUT_2 = [
+            ln('========================================'),
+            ln('            terminusd status'),
+            ln('========================================'),
+            ln(''),
+            ln('Inhibitor Settings'),
+            ln('------------------'),
+            ln('Daemon Max Delay       : 1800s'),
+            ln('Logind Max Delay       : 1800s'),
+            ln('Delay Match            : yes'),
+            ln(''),
+            ln('Shutdown Controls'),
+            ln('-----------------'),
+            ln('Shutdown Requests      : enabled', 'ok'),
+            ln('Shutdown Guard         : disabled'),
+            ln('Guard Type             : oneshot'),
+            ln('Guard Command          : <unset>'),
+            ln('Guard User             : <daemon>'),
+            ln('Guard Group            : <daemon>'),
+            ln('Guard Env File         : <inherited>'),
+            ln('Guard Interval         : 30s'),
+            ln('Guard Threshold        : 1'),
+            ln(''),
+            ln('Shutdown Execution Plan'),
+            ln('---------------------'),
+            ln('Enabled Scripts  : 3'),
+            ln(''),
+            ln('Priority 50 (1 script)'),
+            ln('  [1] terminateusersessions'),
+            ln('      critical : no'),
+            ln('      command  : /usr/libexec/terminusd/examples/example-terminate-user-sessions.sh'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+            ln(''),
+            ln('Priority 100 (2 scripts)'),
+            ln('  [2] notifyusers'),
+            ln('      critical : no'),
+            ln('      command  : /usr/libexec/terminusd/examples/example-shutdown-notify.sh'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+            ln(''),
+            ln('  [3] sleepdelay'),
+            ln('      critical : no'),
+            ln('      command  : /bin/sleep 5'),
+            ln('      user     : root'),
+            ln('      group    : root'),
+            ln('      env      : <inherited>'),
+        ];
+
+        whenVisible(document.getElementById('terminusctl-anim-wrap'), function () { t.runSteps([
+            {
+                cmd: 'terminusctl status',
+                out: STATUS_OUT_1
+            },
+            {
+                cmd: "sed -i 's/^priority = .*/priority = 50/' /etc/terminus.d/terminateusersessions.conf",
+                cmdPause: 200,
+                out: []
+            },
+            {
+                cmd: 'terminusctl reload-config',
+                out: [ ln('configuration reloaded', 'ok') ]
+            },
+            {
+                cmd: 'terminusctl status',
+                out: STATUS_OUT_2
+            },
+        ], 2000, 90000); }); // end whenVisible
+    }());
+
 }());
 </script>
 </body>

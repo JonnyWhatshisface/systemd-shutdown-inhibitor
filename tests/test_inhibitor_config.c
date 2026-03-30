@@ -5,8 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "../daemon/inhibitor.h"
-#include "../daemon/guard.h"
+#include "../src/daemon/inhibitor.h"
+#include "../src/daemon/guard.h"
 
 // Perhaps these can go in a separate state.c to avoid
 // setting them here and just compile the test with state.c
@@ -227,17 +227,17 @@ static void test_load_config_critical(void)
 
     write_file(path,
             "[stopdatabase]\n"
-            "command = /opt/terminusd/scripts/stop-db.sh\n"
+            "command = /usr/libexec/terminusd/examples/stop-db.sh\n"
             "priority = 100\n"
             "critical = true\n"
             "\n"
             "[applyupdates]\n"
-            "command = /opt/terminusd/scripts/update.sh\n"
+            "command = /usr/libexec/terminusd/examples/update.sh\n"
             "priority = 200\n"
             "critical = yes\n"
             "\n"
             "[notify]\n"
-            "command = /opt/terminusd/scripts/notify.sh\n"
+            "command = /usr/libexec/terminusd/examples/notify.sh\n"
             "priority = 300\n"
             "# critical not set -- should default to false\n");
 
@@ -329,12 +329,12 @@ static void test_load_config_dropin_support(void)
             "set_max_inhibit_delay = yes\n"
             "\n"
             "[pkg]\n"
-            "command = /opt/terminusd/scripts/pkg.sh\n"
+            "command = /usr/libexec/terminusd/examples/pkg.sh\n"
             "critical = true\n"
             "simulate_exit_code = 7\n"
             "\n"
             "[newtask]\n"
-            "command = /opt/terminusd/scripts/newtask.sh\n"
+            "command = /usr/libexec/terminusd/examples/newtask.sh\n"
             "priority = 250\n");
 
     write_file(d2_path,
@@ -358,7 +358,7 @@ static void test_load_config_dropin_support(void)
 
     assert(strcmp(scripts[0].name, "pkg") == 0);
     assert(strcmp(scripts[0].command,
-             "/opt/terminusd/scripts/pkg.sh") == 0);
+             "/usr/libexec/terminusd/examples/pkg.sh") == 0);
     assert(scripts[0].priority == 350);
     assert(scripts[0].critical == false);
     assert(scripts[0].simulate_exit_code == 7);
@@ -371,7 +371,7 @@ static void test_load_config_dropin_support(void)
 
     assert(strcmp(scripts[2].name, "newtask") == 0);
     assert(strcmp(scripts[2].command,
-             "/opt/terminusd/scripts/newtask.sh") == 0);
+             "/usr/libexec/terminusd/examples/newtask.sh") == 0);
     assert(scripts[2].priority == 250);
 
     assert(unlink(base_path) == 0);
@@ -568,17 +568,17 @@ static void test_load_selected_config_dropin_enabled_override(void)
 
     write_file(base_path,
             "[notifyusers]\n"
-            "command = /opt/terminusd/scripts/notifyusers.sh\n"
+            "command = /usr/libexec/terminusd/examples/notifyusers.sh\n"
             "priority = 100\n"
             "enabled = true\n"
             "\n"
             "[applyupdates]\n"
-            "command = /opt/terminusd/scripts/applyupdates.sh\n"
+            "command = /usr/libexec/terminusd/examples/applyupdates.sh\n"
             "priority = 200\n"
             "enabled = true\n"
             "\n"
             "[cleanup]\n"
-            "command = /opt/terminusd/scripts/cleanup.sh\n"
+            "command = /usr/libexec/terminusd/examples/cleanup.sh\n"
             "priority = 300\n"
             "enabled = false\n");
 
@@ -640,7 +640,7 @@ static void test_load_config_shutdown_guard(void)
     write_file(path,
         "[main]\n"
         "shutdown_guard_enabled = true\n"
-        "shutdown_guard_command = /opt/terminusd/scripts/my-guard.sh --watch\n"
+        "shutdown_guard_command = /usr/libexec/terminusd/examples/my-guard.sh --watch\n"
         "shutdown_guard_type = persist\n"
         "shutdown_guard_interval = 45\n"
         "shutdown_guard_threshold = 2\n"
@@ -653,7 +653,7 @@ static void test_load_config_shutdown_guard(void)
 
     assert(guard_config.enabled == true);
     assert(strcmp(guard_config.command,
-         "/opt/terminusd/scripts/my-guard.sh --watch") == 0);
+         "/usr/libexec/terminusd/examples/my-guard.sh --watch") == 0);
     assert(guard_config.type == GUARD_TYPE_PERSIST);
     assert(guard_config.interval == 45);
     assert(guard_config.threshold == 2);

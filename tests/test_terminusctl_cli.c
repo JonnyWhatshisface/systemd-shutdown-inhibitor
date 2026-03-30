@@ -23,6 +23,12 @@ static void write_file(const char *path, const char *content)
     assert(fclose(f) == 0);
 }
 
+static int run_terminusctl(const char *socket_path,
+               const char *const *args,
+               int arg_count,
+               char *output,
+               size_t output_cap);
+
 static pid_t start_daemon_test_mode(const char *config_path, const char *socket_path)
 {
     pid_t pid = fork();
@@ -67,6 +73,24 @@ static bool wait_for_socket_ready(const char *socket_path, int timeout_sec)
     while (time(NULL) < deadline) {
         struct stat st;
         if (stat(socket_path, &st) == 0 && S_ISSOCK(st.st_mode))
+            return true;
+
+        usleep(100 * 1000);
+    }
+
+    return false;
+}
+
+static bool wait_for_control_ready(const char *socket_path, int timeout_sec)
+{
+    time_t deadline = time(NULL) + timeout_sec;
+
+    while (time(NULL) < deadline) {
+        const char *cmd[] = {"./terminusctl", "status"};
+        char output[8192];
+        int rc = run_terminusctl(socket_path, cmd, 2, output, sizeof(output));
+
+        if (rc == 0 && strstr(output, "terminusd status") != NULL)
             return true;
 
         usleep(100 * 1000);
@@ -128,7 +152,7 @@ static int run_terminusctl(const char *socket_path,
     int status = 0;
     assert(waitpid(pid, &status, 0) == pid);
     if (!WIFEXITED(status))
-        return -1;
+        return -(128 + WTERMSIG(status));
 
     return WEXITSTATUS(status);
 }
@@ -190,6 +214,12 @@ int main(void)
     if (!wait_for_socket_ready(socket_path, 8)) {
         stop_daemon(daemon_pid);
         fprintf(stderr, "[FAIL] daemon startup: control socket not ready\n");
+        return 1;
+    }
+
+    if (!wait_for_control_ready(socket_path, 8)) {
+        stop_daemon(daemon_pid);
+        fprintf(stderr, "[FAIL] daemon startup: control API not responding\n");
         return 1;
     }
 

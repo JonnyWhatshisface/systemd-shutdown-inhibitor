@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>terminusd Docs - Script Actions</title>
+  <meta name="description" content="Script section configuration and execution semantics for terminusd.">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="shell-grid"></div>
+  <main class="wrap">
+    <header class="topbar">
+      <div class="brand"><strong>terminusd</strong> docs :: script actions</div>
+      <nav class="nav-links">
+        <a href="overview.html">Overview</a>
+        <a href="setup.html">Setup</a>
+        <a href="configuration.html">Configuration</a>
+        <a href="shutdown-guard.html">Shutdown Guard</a>
+        <a href="scripts.html">Script Actions</a>
+        <a href="terminusctl.html">terminusctl</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <div class="kicker">Ascending Order Priority Execution</div>
+      <h1>Full control of shutdown actions, with critical failure gatekeeping.</h1>
+      <p>terminusd uses Priority Group execution logic that executes the groups in ascending order. Actions that share the same priority share a single priority group, and all actions within it will be executed in parallel.</p>
+      <p>Individual actions marked as <code>critical</code> will abort the remaining groups if they fail.</p>
+      <p>Since systemd is still in a functional state by the time the actions are executed, you can build a shutdown flow that caters to your needs, including execution of systemctl commands and anything else.</p>
+    </section>
+
+    <section class="grid">
+      <article class="card span-8">
+        <h2>[Custom Name]</h2>
+        <ul>
+          <li><code>command</code>: executable path with optional arguments. Required.</li>
+          <li><code>priority</code>: priority group. Default <code>1000</code>.</li>
+          <li><code>user</code>, <code>group</code>: optional credential drop before execution.</li>
+          <li><code>env</code>: optional <code>KEY=VALUE</code> file loaded for process environment.</li>
+          <li><code>critical</code>: if true and action fails, all remaining priority groups are skipped.</li>
+          <li><code>enabled</code>: if false, action is ignored and not loaded into temrminusd.</li>
+        </ul>
+      </article>
+
+      <article class="card span-4">
+        <h2>Execution semantics</h2>
+        <ul>
+          <li>Priority 100 runs before 200.</li>
+          <li>Same priority runs in parallel.</li>
+          <li>Critical failure aborts remaining groups.</li>
+          <li>Daemon releases inhibitor afterward.</li>
+        </ul>
+      </article>
+
+      <article class="card span-12">
+        <h2>Example: Staged Maintenance Flow</h2>
+        <p>The following example demonstrates a set of staged executions that send a notification to all users, logs their sessions out and disables further logins to the system <code>(example-logout-users.sh)</code></code>, fails over HA resources, stops required services before installing updates and then triggers update installation.</p>
+        <p>All service stop actions in the example are within a shared priority group and will execute in parallel.</p>
+
+        <pre><code>[notify]
+command = /usr/libexec/terminusd/examples/example-shutdown-notify.sh
+priority = 100
+
+[logout_users]
+command = /usr/libexec/terminusd/examples/example-logout-users.sh
+priority = 200
+
+[ha_failover]
+command = /usr/local/bin/failover-ha-resources.sh --force --noconfirm
+priority = 300
+critical = true
+
+[stop_vcs]
+command = /bin/systemctl stop vcs.service
+priority = 400
+critical = true
+
+[stop_llt]
+command = /bin/systemctl stop llt.service
+priority = 400
+critical = true
+
+[stop_gab]
+command = /bin/systemctl stop gab.service
+priority = 400
+critical = true
+
+[update]
+command = /usr/libexec/terminusd/examples/example-package-updates.sh
+priority = 500
+critical = true
+
+[cleanup]
+command = /usr/local/sbin/post-update-cleanup.sh
+priority = 600
+</code></pre>
+      </article>
+    </section>
+
+    <p class="footer">Next: runtime operations in <a href="terminusctl.html">terminusctl</a>.</p>
+  </main>
+</body>
+</html>
