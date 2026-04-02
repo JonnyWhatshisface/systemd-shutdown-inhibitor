@@ -51,6 +51,9 @@ static void write_control_response(int fd, bool ok, const char *msg) {
     (void)write(fd, buf, (size_t)n);
 }
 
+// TODO: Move to a single function. I cut corners and used copy/paste
+// to speed up, but this should be refactors so poweroff, reboot and
+// shutdown are a single function with an argument.
 static bool run_systemctl_reboot(void) {
     pid_t pid = fork();
     if (pid < 0) {

@@ -238,7 +238,7 @@ int main(int argc, char *argv[]) {
             "ssss",
             "shutdown",
             "terminusd",
-            "Trigger updates on shutdown/reboot",
+            "Execute shutdown actions",
             "delay");
         if (r < 0) {
             syslog(LOG_ERR, "Failed to acquire inhibitor lock: %s", error.message ? error.message : strerror(-r));

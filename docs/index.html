@@ -447,12 +447,12 @@
             </div>
             <div class="hero-body">
                 <div>
-                    <h1>Control shutdowns. Completely.</h1>
+                    <h1>Take control of shutdowns.</h1>
                     <p class="tagline">
-                        terminusd is a lightweight shutdown inhibitor daemon that gives you precise control over
-                        shutdowns, reboots, and poweroffs. Build a priority-based workflow for what runs before the
-                        system goes down, block or allow reboot activity based on your criteria, and apply updates and
-                        patches safely while services are still available.
+                        Automate things at shutdown and reboot that you can't with a unit file due to systemctl not being available.
+                        Deterministically enable/disable reboots and shutdowns system-wide using your own scripts to make the decision.
+                        Get rid of <code>offline-updates</code> and upgrade your packages on the way down, eliminating dual reboots.
+                        <br><br><code>terminusd</code> gives you full control of what happens with shutdowns and reboots.
                     </p>
                     <div class="cta">
                         <a class="btn primary" href="https://github.com/JonnyWhatshisface/systemd-shutdown-inhibitor">View Source</a>
@@ -468,9 +468,9 @@
         <section class="section" id="features">
             <h2>Why terminusd</h2>
             <p>
-                Built for those who need reliable control of shutdown, reboot, and poweroff orchestration without heavyweight tooling.
-                You get deterministic order of actions, safe package upgrades, coordinated cluster failover, and guardrails against 
-                accidental reboots - all with a simple config and clear logs. All before systemd even enters shutdown state.
+                Built for those who need reliable control of shutdown, reboot, and poweroff orchestration that depends on controlling
+                service states. You get deterministic order of actions, safe package upgrades, coordinated cluster failover and guardrails
+                 against accidental reboots with a simple configuration and clear logs.
             </p>
             <div class="features">
                 <article class="card">
